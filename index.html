@@ -17,9 +17,11 @@
     </style>
 </head>
 <body>
-    <script type="module" src="Main.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
-    <script>
+ 
+    <script type="module">
+        import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.121.1/build/three.module.js";
+        import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.121.1/examples/jsm/controls/OrbitControls.js";
+      
         // Set up the scene, camera, and renderer
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -136,6 +138,13 @@
         }
 
         animate();
+
+<script>  src="http://threejs.org/build/three.min.js"></script>
+<script> src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+<script src="https://threejs.org/examples/js/loaders/3MFLoader.js"></script>
+<script src="https://threejs.org/examples/js/loaders/OBJLoader.js"></script>
+<script src="https://threejs.org/examples/js/loaders/STLLoader.js"></script>
+
     </script>
 </body>
 </html>
