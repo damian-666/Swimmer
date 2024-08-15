@@ -54,31 +54,47 @@
     scene.add(carbon);
     carbon.position.x = earthRadius + (earthRadius * 0.1); // Positioning carbon on orbit
 
-    let lastPosition = new THREE.Vector3(carbon.position.x, carbon.position.y, carbon.position.z);
-    let currentPosition = new THREE.Vector3(carbon.position.x, carbon.position.y, carbon.position.z);
-    let velocity = new THREE.Vector3(0, 10, 0); // Initial velocity
-    let acceleration = new THREE.Vector3(0, -9.81, 0); // Constant acceleration towards Earth
+let velocity = new THREE.Vector3(0, 7, 0); // Initial velocity in m/s
+const dt = 0.01; // Time step for integration
+//let acceleration = new THREE.Vector3(); // Initial acceleration
+ let acceleration = new THREE.Vector3(0, -9.81, 0);
 
-    function updatePositionVerlet() {
-        let tempPosition = currentPosition.clone();
-        let accelTerm = acceleration.clone().multiplyScalar(0.5); // For Verlet integration
+const earthCenter = new THREE.Vector3(0, 0, 0); // Earth's center at origin\
 
-        currentPosition.add(velocity.clone().add(accelTerm)); // New position
-        velocity.add(accelTerm.multiplyScalar(2)); // Update velocity by adding twice the acceleration term
+   const accelerationMagnitude = 10;//9.81; // Adjust this value based on scale and desired effect
 
-        carbon.position.copy(currentPosition);
-        lastPosition.copy(tempPosition);
 
-        document.getElementById('info').innerText = `Carbon Position: ${carbon.position.x.toFixed(2)}, ${carbon.position.y.toFixed(2)}, ${carbon.position.z.toFixed(2)}`;
-    }
+function updatePositionVerlet() {
+    requestAnimationFrame(animate);
+
+
+    
+     // Calculate the direction towards Earth's center
+     let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+    
+    // Magnitude of acceleration, simulating Earth's gravity, roughly 9.81 m/s^2 scaled down
+ 
+    
+    // Calculate acceleration vector
+    let acceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
+    
+    // Update velocity and position using a simple Euler integration
+    velocity.add(acceleration.clone().multiplyScalar(dt));
+    carbon.position.add(velocity.clone().multiplyScalar(dt));
+
+
+    // Update information display
+ //   document.getElementById('info').innerText = `Carbon Position:// //${carbon.position.x.toFixed(2)}, ${carbon.position.y.toFixed(2)}, //${carbon.position.z.toFixed(2)}`;
+}
+
+
 
     function animate() {
         requestAnimationFrame(animate);
         updatePositionVerlet();
         renderer.render(scene, camera);
     }
-
-    animate();
+animate();
 </script>
 </body>
 </html>
