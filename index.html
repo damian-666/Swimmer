@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orbit Simulation</title>
+    <title>Orbit Simulation - Top View</title>
     <style>
         body { margin: 0; }
         canvas { display: block; }
@@ -22,28 +22,34 @@
     import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.121.1/examples/jsm/controls/OrbitControls.js';
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const camera = new THREE.OrthographicCamera(window.innerWidth / -2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / -2, 1, 5000);
+    camera.position.set(0, -2000, 0);
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
+
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
+    // Earth wireframe
     const earthGeometry = new THREE.SphereGeometry(6371, 32, 32); // Earth radius in kilometers, scaled down
-    const earthMaterial = new THREE.MeshBasicMaterial({ color: 0x123456 });
-    const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+    const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+    const wireframe = new THREE.WireframeGeometry(earthGeometry);
+    const earth = new THREE.LineSegments(wireframe, wireframeMaterial);
     scene.add(earth);
 
-    const carbonGeometry = new THREE.SphereGeometry(0.1, 32, 32);
-    const carbonMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    // Carbon atom as a small orange sphere
+    const carbonGeometry = new THREE.SphereGeometry(637.1, 32, 32); // 10% of Earth's size
+    const carbonMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500 });
     const carbon = new THREE.Mesh(carbonGeometry, carbonMaterial);
-    carbon.position.set(6400, 0, 0); // Initial position slightly above Earth surface
+    carbon.position.set(7000, 0, 0); // Slightly above Earth's surface
     scene.add(carbon);
 
-    camera.position.z = 10000;
     const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableRotate = false;
 
     let lastPosition = new THREE.Vector3();
     let currentPosition = new THREE.Vector3(carbon.position.x, carbon.position.y, carbon.position.z);
-    let velocity = new THREE.Vector3(0, 10, 0);
+    let velocity = new THREE.Vector3(0, 0, 10); // Circular motion around the pole
     let acceleration = new THREE.Vector3();
 
     function updatePositionVerlet() {
@@ -61,7 +67,6 @@
     function animate() {
         requestAnimationFrame(animate);
         updatePositionVerlet();
-        controls.update(); // necessary if controls.enableDamping or controls.autoRotate are set
         renderer.render(scene, camera);
     }
     animate();
