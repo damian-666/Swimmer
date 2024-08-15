@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orbit Simulation - Top View</title>
+    <title>Orbit Simulation - Enhanced View</title>
     <style>
         body { margin: 0; }
         canvas { display: block; }
@@ -19,56 +19,54 @@
 <div id="info"></div>
 <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.121.1/build/three.module.js';
-    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.121.1/examples/jsm/controls/OrbitControls.js';
 
     const scene = new THREE.Scene();
-    const camera = new THREE.OrthographicCamera(window.innerWidth / -2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / -2, 1, 5000);
-    camera.position.set(0, -2000, 0);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
+    camera.position.set(0, -9000, 0);
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Earth wireframe
-    const earthGeometry = new THREE.SphereGeometry(6371, 32, 32); // Earth radius in kilometers, scaled down
-    const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
-    const wireframe = new THREE.WireframeGeometry(earthGeometry);
-    const earth = new THREE.LineSegments(wireframe, wireframeMaterial);
+    // Earth with longitude lines
+    const earthRadius = 4000;//6371;
+    const earthGeometry = new THREE.SphereGeometry(earthRadius, 32, 32);
+    const earthMaterial = new THREE.MeshBasicMaterial({ color: 0x123456, wireframe: true });
+    const earth = new THREE.Mesh(earthGeometry, earthMaterial);
     scene.add(earth);
 
-    // Carbon atom as a small orange sphere
-    const carbonGeometry = new THREE.SphereGeometry(637.1, 32, 32); // 10% of Earth's size
+    // Adding great circles for longitude every 6 degrees
+    for (let i = 0; i < 360; i += 6) {
+        let longitudeGeometry = new THREE.CircleGeometry(earthRadius, 64);
+        longitudeGeometry.vertices.shift(); // remove the center vertex
+        longitudeGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+        longitudeGeometry.applyMatrix4(new THREE.Matrix4().makeRotationZ(THREE.Math.degToRad(i)));
+        let longitudeMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
+        let longitudeLine = new THREE.LineLoop(longitudeGeometry, longitudeMaterial);
+        scene.add(longitudeLine);
+    }
+
+    // Carbon atom
+    const carbonGeometry = new THREE.SphereGeometry(earthRadius * 0.1, 32, 32);
     const carbonMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500 });
     const carbon = new THREE.Mesh(carbonGeometry, carbonMaterial);
-    carbon.position.set(7000, 0, 0); // Slightly above Earth's surface
     scene.add(carbon);
+    carbon.position.x = earthRadius + (earthRadius * 0.1); // Positioning carbon on orbit
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableRotate = false;
-
-    let lastPosition = new THREE.Vector3();
-    let currentPosition = new THREE.Vector3(carbon.position.x, carbon.position.y, carbon.position.z);
-    let velocity = new THREE.Vector3(0, 0, 10); // Circular motion around the pole
-    let acceleration = new THREE.Vector3();
-
-    function updatePositionVerlet() {
-        acceleration.copy(currentPosition).multiplyScalar(-1).normalize().multiplyScalar(9.81); // Simplified gravitational force
-
-        const tempPosition = currentPosition.clone();
-        currentPosition.add(velocity.clone().add(acceleration.clone().multiplyScalar(0.5))); // Position Verlet integration
-        velocity.add(acceleration);
-        lastPosition.copy(tempPosition);
-
-        carbon.position.copy(currentPosition);
-        document.getElementById('info').innerText = `Carbon Position: ${carbon.position.x.toFixed(2)}, ${carbon.position.y.toFixed(2)}, ${carbon.position.z.toFixed(2)}`;
-    }
+    let theta = 0; // angle for orbit calculation
 
     function animate() {
         requestAnimationFrame(animate);
-        updatePositionVerlet();
+        
+        // Orbit calculation for circular motion in a plane
+        theta += 0.01;
+        carbon.position.x = (earthRadius + (earthRadius * 0.1)) * Math.cos(theta);
+        carbon.position.z = (earthRadius + (earthRadius * 0.1)) * Math.sin(theta);
+
         renderer.render(scene, camera);
     }
+
     animate();
 </script>
 </body>
