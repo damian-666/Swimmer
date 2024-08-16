@@ -54,39 +54,35 @@
     scene.add(carbon);
     carbon.position.x = earthRadius + (earthRadius * 0.1); // Positioning carbon on orbit
 
-let velocity = new THREE.Vector3(0, 7, 0); // Initial velocity in m/s
-const dt = 0.01; // Time step for integration
+let velocity = new THREE.Vector3(0, 11, 0); // Initial velocity in m/s
+const dt = 0.1; // Time step for integration
 //let acceleration = new THREE.Vector3(); // Initial acceleration
  let acceleration = new THREE.Vector3(0, -9.81, 0);
 
 const earthCenter = new THREE.Vector3(0, 0, 0); // Earth's center at origin\
 
-   const accelerationMagnitude = 10;//9.81; // Adjust this value based on scale and desired effect
+   const accelerationMagnitude = 100;//9.81; // Adjust this value based on scale and desired effect
 
+   function updatePositionVerlet() {
+    // Calculate the direction towards Earth's center
+    let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
 
-function updatePositionVerlet() {
-    requestAnimationFrame(animate);
-
-
-    
-     // Calculate the direction towards Earth's center
-     let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
-    
     // Magnitude of acceleration, simulating Earth's gravity, roughly 9.81 m/s^2 scaled down
- 
-    
+    let accelerationMagnitude = 100; // Adjust this value based on scale and desired effect
+
     // Calculate acceleration vector
     let acceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
-    
-    // Update velocity and position using a simple Euler integration
-    velocity.add(acceleration.clone().multiplyScalar(dt));
-    carbon.position.add(velocity.clone().multiplyScalar(dt));
 
+    // Update position using current velocity and half of the current acceleration (Velocity Verlet)
+    carbon.position.add(velocity.clone().multiplyScalar(dt)).add(acceleration.clone().multiplyScalar(0.5 * dt * dt));
 
-    // Update information display
- //   document.getElementById('info').innerText = `Carbon Position:// //${carbon.position.x.toFixed(2)}, ${carbon.position.y.toFixed(2)}, //${carbon.position.z.toFixed(2)}`;
+    // Calculate new acceleration based on the updated position
+    directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+    let newAcceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
+
+    // Update velocity using the average of old and new acceleration
+    velocity.add(acceleration.add(newAcceleration).multiplyScalar(0.5 * dt));
 }
-
 
 
     function animate() {
