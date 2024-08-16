@@ -81,13 +81,33 @@ const earthCenter = new THREE.Vector3(0, 0, 0); // Earth's center at origin\
     let newAcceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
 
     // Update velocity using the average of old and new acceleration
-    velocity.add(acceleration.add(newAcceleration).multiplyScalar(0.5 * dt));
+    velocity.add(acceleration.add(newAcceleration).multilkplyScalar(0.5 * dt));
 }
 
 
+function updatePositionEuler() {
+    
+     // Calculate the direction towards Earth's center
+     let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+    
+    // Magnitude of acceleration, simulating Earth's gravity, roughly 9.81 m/s^2 scaled down
+ 
+    
+    // Calculate acceleration vector
+    let acceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
+    
+    // Update velocity and position using a simple Euler integration
+    velocity.add(acceleration.clone().multiplyScalar(dt));
+    carbon.position.add(velocity.clone().multiplyScalar(dt));
+
+
+    // Update information display
+ //   document.getElementById('info').innerText = `Carbon Position:// //${carbon.position.x.toFixed(2)}, ${carbon.position.y.toFixed(2)}, //${carbon.position.z.toFixed(2)}`;
+}
     function animate() {
         requestAnimationFrame(animate);
-        updatePositionVerlet();
+      //  updatePositionVerlet();
+        updatePositionEuler();
         renderer.render(scene, camera);
     }
 animate();
