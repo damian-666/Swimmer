@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orbit Simulation - Dynamic Integration</title>
+    <title>Orbit Simulation - Formaldehyde Molecule</title>
     <style>
         body { margin: 0; }
         canvas { display: block; }
@@ -29,10 +29,10 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-      // Earth with longitude lines
-    const earthRadius = 4000;//6371;
+    // Earth with longitude lines
+    const earthRadius = 4000;
     const earthGeometry = new THREE.SphereGeometry(earthRadius, 32, 32);
-   const earthMaterial = new THREE.MeshBasicMaterial({ color: 0x123456, wireframe: true });
+    const earthMaterial = new THREE.MeshBasicMaterial({ color: 0x123456, wireframe: true });
     const earth = new THREE.Mesh(earthGeometry, earthMaterial);
     scene.add(earth);
 
@@ -52,182 +52,63 @@
     const carbonMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500 });
     const carbon = new THREE.Mesh(carbonGeometry, carbonMaterial);
     scene.add(carbon);
-    carbon.position.x = earthRadius + (earthRadius * 0.1); // Positioning carbon on orbit
 
-let velocity = new THREE.Vector3(0, 11, 0); // Initial velocity in m/s
-const dt = 0.1; // Time step for integration
-//let acceleration = new THREE.Vector3(); // Initial acceleration
- let acceleration = new THREE.Vector3(0, -9.81, 0);
+    // Oxygen atom
+    const oxygenGeometry = new THREE.SphereGeometry(earthRadius * 0.12, 32, 32);
+    const oxygenMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const oxygen = new THREE.Mesh(oxygenGeometry, oxygenMaterial);
+    scene.add(oxygen);
 
-const earthCenter = new THREE.Vector3(0, 0, 0); // Earth's center at origin\
+    // Hydrogen atoms
+    const hydrogenGeometry = new THREE.SphereGeometry(earthRadius * 0.05, 32, 32);
+    const hydrogenMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const hydrogen1 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
+    const hydrogen2 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
+    scene.add(hydrogen1);
+    scene.add(hydrogen2);
 
-   const accelerationMagnitude = 100;//9.81; // Adjust this value based on scale and desired effect
+    // Position atoms relative to carbon
+    const distanceCO = 1.2 * earthRadius * 0.1; // Carbon-Oxygen bond length
+    const distanceCH = 1.0 * earthRadius * 0.1; // Carbon-Hydrogen bond length
 
-   function updatePositionVerlet() {
-    // Calculate the direction towards Earth's center
-    let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+    carbon.position.set(earthRadius + (earthRadius * 0.1), 0, 0);
+    oxygen.position.set(carbon.position.x + distanceCO, carbon.position.y, carbon.position.z);
+    hydrogen1.position.set(carbon.position.x - distanceCH, carbon.position.y + distanceCH, carbon.position.z);
+    hydrogen2.position.set(carbon.position.x - distanceCH, carbon.position.y - distanceCH, carbon.position.z);
 
-    // Magnitude of acceleration, simulating Earth's gravity, roughly 9.81 m/s^2 scaled down
-    let accelerationMagnitude = 100; // Adjust this value based on scale and desired effect
+    let velocity = new THREE.Vector3(0, 7, 0);
+    const dt = 0.1;
+    const earthCenter = new THREE.Vector3(0, 0, 0);
+    const accelerationMagnitude = 10;
 
-    // Calculate acceleration vector
-    let acceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
+    function updatePositionVerlet() {
+        // Calculate direction towards Earth's center
+        let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+        let acceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
 
-    // Update position using current velocity and half of the current acceleration (Velocity Verlet)
-    carbon.position.add(velocity.clone().multiplyScalar(dt)).add(acceleration.clone().multiplyScalar(0.5 * dt * dt));
+        // Update position of carbon using current velocity and half of current acceleration
+        carbon.position.add(velocity.clone().multiplyScalar(dt)).add(acceleration.clone().multiplyScalar(0.5 * dt * dt));
 
-    // Calculate new acceleration based on the updated position
-    directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
-    let newAcceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
+        // Update positions of other atoms relative to the carbon atom's new position
+        oxygen.position.set(carbon.position.x + distanceCO, carbon.position.y, carbon.position.z);
+        hydrogen1.position.set(carbon.position.x - distanceCH, carbon.position.y + distanceCH, carbon.position.z);
+        hydrogen2.position.set(carbon.position.x - distanceCH, carbon.position.y - distanceCH, carbon.position.z);
 
-    // Update velocity using the average of old and new acceleration
-    velocity.add(acceleration.add(newAcceleration).multilkplyScalar(0.5 * dt));
-}
+        // Calculate new acceleration based on updated position
+        directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+        let newAcceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
 
-
-function updatePositionEuler() {
-    
-     // Calculate the direction towards Earth's center
-     let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
-    
-    // Magnitude of acceleration, simulating Earth's gravity, roughly 9.81 m/s^2 scaled down
- 
-    
-    // Calculate acceleration vector
-    let acceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
-    
-    // Update velocity and position using a simple Euler integration
-    velocity.add(acceleration.clone().multiplyScalar(dt));
-    carbon.position.add(velocity.clone().multiplyScalar(dt));
-
-
-    // Update information display
- //   document.getElementById('info').innerText = `Carbon Position:// //${carbon.position.x.toFixed(2)}, ${carbon.position.y.toFixed(2)}, //${carbon.position.z.toFixed(2)}`;
-}
-
-       // Set up the scene, camera, and renderer
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-
-        // Set up camera position
-        camera.position.z = 5;
-
-        // Add orbit controls
-        const controls = new THREE.OrbitControls(camera, renderer.domElement);
-
-        // Add a light source
-        const light = new THREE.PointLight(0xFFFFFF);
-        light.position.set(10, 10, 10);
-        scene.add(light);
-
-        // Function to create a sphere representing an atom
-        function createAtom(radius, color) {
-            const geometry = new THREE.SphereGeometry(radius, 32, 32);
-            const material = new THREE.MeshPhongMaterial({ color: color });
-            return new THREE.Mesh(geometry, material);
-        }
-
-        // Create the formaldehyde molecule (C, O, H atoms)
-        const carbon = createAtom(0.1, 0x000000);  // Black for Carbon
-        carbon.position.set(0, 0, 0);
-        const oxygen = createAtom(0.15, 0xFF0000); // Red for Oxygen
-        oxygen.position.set(0, 0, 1.2);
-        const hydrogen1 = createAtom(0.05, 0x00FF00); // Green for Hydrogen1
-        hydrogen1.position.set(1.0, 0, -0.5);
-        const hydrogen2 = createAtom(0.05, 0x00FF00); // Green for Hydrogen2
-        hydrogen2.position.set(-1.0, 0, -0.5);
-
-        // Add atoms to the scene
-        scene.add(carbon);
-        scene.add(oxygen);
-        scene.add(hydrogen1);
-        scene.add(hydrogen2);
-
-        // Create labels for the atoms
-        function createLabel(text, position) {
-            const div = document.createElement('div');
-            div.className = 'label';
-            div.textContent = text;
-            document.body.appendChild(div);
-            return { element: div, position: position };
-        }
-
-        const labels = [
-            createLabel('C', carbon.position),
-            createLabel('O', oxygen.position),
-            createLabel('H1', hydrogen1.position),
-            createLabel('H2', hydrogen2.position)
-        ];
-
-        // Create lines connecting atoms
-        function createBond(start, end) {
-            const material = new THREE.LineBasicMaterial({ color: 0x000000 });
-            const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-            return new THREE.Line(geometry, material);
-        }
-
-        // Add bonds
-        let bonds = [];
-        bonds.push(createBond(carbon.position, oxygen.position)); // C-O bond
-        bonds.push(createBond(carbon.position, hydrogen1.position)); // C-H1 bond
-        bonds.push(createBond(carbon.position, hydrogen2.position)); // C-H2 bond
-        bonds.forEach(bond => scene.add(bond));
-
-        // Function to calculate the force based on 1/R potential
-        function calculateForce(atom1, atom2) {
-            const distance = atom1.position.distanceTo(atom2.position);
-            const forceMagnitude = 1 / (distance * distance);
-            const forceDirection = atom2.position.clone().sub(atom1.position).normalize();
-            return forceDirection.multiplyScalar(forceMagnitude);
-        }
-
-        // Function to update positions using Verlet integration
-        let dt = 0.01;
-        let velocity1 = new THREE.Vector3();
-        let velocity2 = new THREE.Vector3();
-
-        function updatePositionsVerlet() {
-            const force1 = calculateForce(carbon, hydrogen1);
-            const force2 = calculateForce(carbon, hydrogen2);
-
-            // Update velocities
-            velocity1.add(force1.multiplyScalar(dt));
-            velocity2.add(force2.multiplyScalar(dt));
-
-            // Update positions
-            hydrogen1.position.add(velocity1.clone().multiplyScalar(dt));
-            hydrogen2.position.add(velocity2.clone().multiplyScalar(dt));
-
-            // Update bonds
-            bonds.forEach(bond => scene.remove(bond)); // Remove existing bonds
-            bonds = [];
-            bonds.push(createBond(carbon.position, oxygen.position)); // C-O bond
-            bonds.push(createBond(carbon.position, hydrogen1.position)); // C-H1 bond
-            bonds.push(createBond(carbon.position, hydrogen2.position)); // C-H2 bond
-            bonds.forEach(bond => scene.add(bond));
-        }
-
-  
-
-        animate();
-  
-
+        // Update velocity using the average of old and new acceleration
+        velocity.add(acceleration.add(newAcceleration).multiplyScalar(0.5 * dt));
+    }
 
     function animate() {
         requestAnimationFrame(animate);
-      //  updatePositionVerlet();
-        updatePositionEuler();
+        updatePositionVerlet();
         renderer.render(scene, camera);
     }
 
-
-
-
-
-animate();
+    animate();
 </script>
 </body>
 </html>
