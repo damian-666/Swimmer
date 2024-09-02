@@ -49,10 +49,10 @@
 
     // Carbon atom
     const carbonGeometry = new THREE.SphereGeometry(earthRadius * 0.1, 32, 32);
-    const carbonMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500 });
-    const carbon = new THREE.Mesh(carbonGeometry, carbonMaterial);
-    scene.add(carbon);
-    carbon.position.x = earthRadius + (earthRadius * 0.1); // Positioning carbon on orbit
+  //  const carbonMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500 });
+  //  const carbon = new THREE.Mesh(carbonGeometry, carbonMaterial);
+  //  scene.add(carbon);
+  //  carbon.position.x = earthRadius + (earthRadius * 0.1); // Positioning carbon on orbit
 
 let velocity = new THREE.Vector3(0, 11, 0); // Initial velocity in m/s
 const dt = 0.1; // Time step for integration
@@ -106,10 +106,7 @@ function updatePositionEuler() {
 }
 
        // Set up the scene, camera, and renderer
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+          renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
         // Set up camera position
@@ -185,7 +182,7 @@ function updatePositionEuler() {
         }
 
         // Function to update positions using Verlet integration
-        let dt = 0.01;
+     //   let dt = 0.01;
         let velocity1 = new THREE.Vector3();
         let velocity2 = new THREE.Vector3();
 
