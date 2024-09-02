@@ -104,12 +104,129 @@ function updatePositionEuler() {
     // Update information display
  //   document.getElementById('info').innerText = `Carbon Position:// //${carbon.position.x.toFixed(2)}, ${carbon.position.y.toFixed(2)}, //${carbon.position.z.toFixed(2)}`;
 }
+
+       // Set up the scene, camera, and renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Set up camera position
+        camera.position.z = 5;
+
+        // Add orbit controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        // Add a light source
+        const light = new THREE.PointLight(0xFFFFFF);
+        light.position.set(10, 10, 10);
+        scene.add(light);
+
+        // Function to create a sphere representing an atom
+        function createAtom(radius, color) {
+            const geometry = new THREE.SphereGeometry(radius, 32, 32);
+            const material = new THREE.MeshPhongMaterial({ color: color });
+            return new THREE.Mesh(geometry, material);
+        }
+
+        // Create the formaldehyde molecule (C, O, H atoms)
+        const carbon = createAtom(0.1, 0x000000);  // Black for Carbon
+        carbon.position.set(0, 0, 0);
+        const oxygen = createAtom(0.15, 0xFF0000); // Red for Oxygen
+        oxygen.position.set(0, 0, 1.2);
+        const hydrogen1 = createAtom(0.05, 0x00FF00); // Green for Hydrogen1
+        hydrogen1.position.set(1.0, 0, -0.5);
+        const hydrogen2 = createAtom(0.05, 0x00FF00); // Green for Hydrogen2
+        hydrogen2.position.set(-1.0, 0, -0.5);
+
+        // Add atoms to the scene
+        scene.add(carbon);
+        scene.add(oxygen);
+        scene.add(hydrogen1);
+        scene.add(hydrogen2);
+
+        // Create labels for the atoms
+        function createLabel(text, position) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            document.body.appendChild(div);
+            return { element: div, position: position };
+        }
+
+        const labels = [
+            createLabel('C', carbon.position),
+            createLabel('O', oxygen.position),
+            createLabel('H1', hydrogen1.position),
+            createLabel('H2', hydrogen2.position)
+        ];
+
+        // Create lines connecting atoms
+        function createBond(start, end) {
+            const material = new THREE.LineBasicMaterial({ color: 0x000000 });
+            const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+            return new THREE.Line(geometry, material);
+        }
+
+        // Add bonds
+        let bonds = [];
+        bonds.push(createBond(carbon.position, oxygen.position)); // C-O bond
+        bonds.push(createBond(carbon.position, hydrogen1.position)); // C-H1 bond
+        bonds.push(createBond(carbon.position, hydrogen2.position)); // C-H2 bond
+        bonds.forEach(bond => scene.add(bond));
+
+        // Function to calculate the force based on 1/R potential
+        function calculateForce(atom1, atom2) {
+            const distance = atom1.position.distanceTo(atom2.position);
+            const forceMagnitude = 1 / (distance * distance);
+            const forceDirection = atom2.position.clone().sub(atom1.position).normalize();
+            return forceDirection.multiplyScalar(forceMagnitude);
+        }
+
+        // Function to update positions using Verlet integration
+        let dt = 0.01;
+        let velocity1 = new THREE.Vector3();
+        let velocity2 = new THREE.Vector3();
+
+        function updatePositionsVerlet() {
+            const force1 = calculateForce(carbon, hydrogen1);
+            const force2 = calculateForce(carbon, hydrogen2);
+
+            // Update velocities
+            velocity1.add(force1.multiplyScalar(dt));
+            velocity2.add(force2.multiplyScalar(dt));
+
+            // Update positions
+            hydrogen1.position.add(velocity1.clone().multiplyScalar(dt));
+            hydrogen2.position.add(velocity2.clone().multiplyScalar(dt));
+
+            // Update bonds
+            bonds.forEach(bond => scene.remove(bond)); // Remove existing bonds
+            bonds = [];
+            bonds.push(createBond(carbon.position, oxygen.position)); // C-O bond
+            bonds.push(createBond(carbon.position, hydrogen1.position)); // C-H1 bond
+            bonds.push(createBond(carbon.position, hydrogen2.position)); // C-H2 bond
+            bonds.forEach(bond => scene.add(bond));
+        }
+
+  
+
+        animate();
+  
+
+
     function animate() {
         requestAnimationFrame(animate);
       //  updatePositionVerlet();
         updatePositionEuler();
         renderer.render(scene, camera);
     }
+
+
+
+
+
 animate();
 </script>
 </body>
