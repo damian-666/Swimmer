@@ -85,27 +85,26 @@
     hydrogen1.position.set(carbon.position.x - distanceCH, carbon.position.y + distanceCH, carbon.position.z);
     hydrogen2.position.set(carbon.position.x - distanceCH, carbon.position.y - distanceCH, carbon.position.z);
 
-    const G = 1000000;  // Increased gravity
-    let velocity = new THREE.Vector3(0, Math.sqrt(G / carbon.position.length()), 0);
-    const dt = 0.5;
+    const G = 10000;  // Adjusted gravity constant based on your simulation needs
+    const initialRadius = carbon.position.length();
+    let velocity = new THREE.Vector3(0, Math.sqrt(G / initialRadius), 0);
+    const dt = 0.5;  // Reduced dt for better accuracy
     const earthCenter = new THREE.Vector3(0, 0, 0);
     let oscillationPhase = 0;
 
     // Constants for the oscillation
-    let amplitude = 500; // Amplitude of the oscillation (adjusted for visibility)
+    let amplitude = 500; // Amplitude of the oscillation
     let omega = 2 * Math.PI; // Angular frequency
 
     let oscillationEnabled = true;  // Toggle for enabling/disabling oscillations
 
     function updateMoleculeOscillation() {
         if (oscillationEnabled) {
-            // Oscillation logic for Hydrogen atoms in the molecule's coordinate system
             const oscillationForceH = amplitude * Math.sin(omega * oscillationPhase);
 
             hydrogen1.position.y = carbon.position.y + distanceCH + oscillationForceH;
             hydrogen2.position.y = carbon.position.y - distanceCH - oscillationForceH;
 
-            // Oxygen atom follows the opposite phase of hydrogen atoms
             oxygen.position.x = carbon.position.x + distanceCO + oscillationForceH * 0.5;
 
             oscillationPhase += dt;
@@ -113,41 +112,47 @@
     }
 
     function applyCentralForce() {
-        // Calculate direction towards Earth's center for carbon atom
         let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
         let centralForce = directionToCenter.multiplyScalar(G / carbon.position.lengthSq());
 
-        // Apply the central force to all atoms equally
         const atoms = [carbon, oxygen, hydrogen1, hydrogen2];
         atoms.forEach(atom => {
             let acceleration = centralForce.clone();
             atom.position.add(velocity.clone().multiplyScalar(dt)).add(acceleration.clone().multiplyScalar(0.5 * dt * dt));
-            velocity.add(acceleration.clone().multiplyScalar(dt));
+
+            let newDirectionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+            let newCentralForce = newDirectionToCenter.multiplyScalar(G / carbon.position.lengthSq());
+
+            let newAcceleration = newCentralForce.clone();
+            velocity.add(acceleration.add(newAcceleration).multiplyScalar(0.5 * dt));
         });
     }
 
     function animate() {
-        requestAnimationFrame(animate);
+       
+        for (let i = 0; i < 10; i++) {
+         
+            applyCentralForce();
+        }
+
         updateMoleculeOscillation();
-        applyCentralForce();
+ requestAnimationFrame(animate);
+
         renderer.render(scene, camera);
     }
 
     animate();
 
-    // Function to toggle oscillation on/off
-    window.toggleOscillation = function() {
+    window.toggleOscillation = function () {
         oscillationEnabled = !oscillationEnabled;
     };
 
-    // Function to reset simulation with no oscillation
-    window.resetSimulation = function() {
+    window.resetSimulation = function () {
         oscillationEnabled = false;
-        velocity.set(0, Math.sqrt(G / carbon.position.length()), 0);
+        velocity.set(0, Math.sqrt(G / initialRadius), 0);
         oscillationPhase = 0;
     };
 
-    // Update amplitude and frequency based on slider input
     document.getElementById('amplitude').addEventListener('input', (event) => {
         amplitude = parseFloat(event.target.value);
         document.getElementById('amplitudeValue').textContent = amplitude;
