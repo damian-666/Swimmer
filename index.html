@@ -88,7 +88,7 @@
     const G = 10000;  // Adjusted gravity constant based on your simulation needs
     const initialRadius = carbon.position.length();
     let velocity = new THREE.Vector3(0, Math.sqrt(G / initialRadius), 0);
-    const dt = 0.5;  // Reduced dt for better accuracy
+    const dt = 0.25;  // Reduced dt for better accuracy
     const earthCenter = new THREE.Vector3(0, 0, 0);
     let oscillationPhase = 0;
 
@@ -129,14 +129,12 @@
     }
 
     function animate() {
-       
+        requestAnimationFrame(animate);
+
         for (let i = 0; i < 10; i++) {
          
             applyCentralForce();
         }
-
-        updateMoleculeOscillation();
- requestAnimationFrame(animate);
 
         renderer.render(scene, camera);
     }
