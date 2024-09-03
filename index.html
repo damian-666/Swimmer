@@ -13,10 +13,35 @@
             left: 10px;
             color: white;
         }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #controls label {
+            display: block;
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
 <div id="info"></div>
+<div id="controls">
+    <label>
+        Amplitude: <span id="amplitudeValue">500</span>
+        <input type="range" id="amplitude" min="100" max="1000" step="10" value="500">
+    </label>
+    <label>
+        Frequency: <span id="frequencyValue">1</span>
+        <input type="range" id="frequency" min="0.1" max="5" step="0.1" value="1">
+    </label>
+    <button onclick="toggleOscillation()">Toggle Oscillation</button>
+    <button onclick="resetSimulation()">Reset Simulation</button>
+</div>
+
 <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.121.1/build/three.module.js';
 
@@ -29,37 +54,22 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Earth with longitude lines
     const earthRadius = 4000;
     const earthGeometry = new THREE.SphereGeometry(earthRadius, 32, 32);
     const earthMaterial = new THREE.MeshBasicMaterial({ color: 0x123456, wireframe: true });
     const earth = new THREE.Mesh(earthGeometry, earthMaterial);
     scene.add(earth);
 
-    // Adding great circles for longitude every 6 degrees
-    for (let i = 0; i < 360; i += 6) {
-        let longitudeGeometry = new THREE.CircleGeometry(earthRadius, 64);
-        longitudeGeometry.vertices.shift(); // remove the center vertex
-        longitudeGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-        longitudeGeometry.applyMatrix4(new THREE.Matrix4().makeRotationZ(THREE.Math.degToRad(i)));
-        let longitudeMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
-        let longitudeLine = new THREE.LineLoop(longitudeGeometry, longitudeMaterial);
-        scene.add(longitudeLine);
-    }
-
-    // Carbon atom
     const carbonGeometry = new THREE.SphereGeometry(earthRadius * 0.1, 32, 32);
     const carbonMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500 });
     const carbon = new THREE.Mesh(carbonGeometry, carbonMaterial);
     scene.add(carbon);
 
-    // Oxygen atom
     const oxygenGeometry = new THREE.SphereGeometry(earthRadius * 0.12, 32, 32);
     const oxygenMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
     const oxygen = new THREE.Mesh(oxygenGeometry, oxygenMaterial);
     scene.add(oxygen);
 
-    // Hydrogen atoms
     const hydrogenGeometry = new THREE.SphereGeometry(earthRadius * 0.05, 32, 32);
     const hydrogenMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     const hydrogen1 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
@@ -67,55 +77,86 @@
     scene.add(hydrogen1);
     scene.add(hydrogen2);
 
-    // Position atoms relative to carbon
-    const distanceCO = 1.2 * earthRadius * 0.2; // Carbon-Oxygen bond length
-    const distanceCH = 1.0 * earthRadius * 0.2; // Carbon-Hydrogen bond length
+    const distanceCO = 1.2 * earthRadius * 0.2;
+    const distanceCH = 1.0 * earthRadius * 0.2;
 
     carbon.position.set(earthRadius + (earthRadius * 0.1), 0, 0);
     oxygen.position.set(carbon.position.x + distanceCO, carbon.position.y, carbon.position.z);
     hydrogen1.position.set(carbon.position.x - distanceCH, carbon.position.y + distanceCH, carbon.position.z);
     hydrogen2.position.set(carbon.position.x - distanceCH, carbon.position.y - distanceCH, carbon.position.z);
 
-    const G = 10000000;  // Simplified gravitational constant
-    let velocity = new THREE.Vector3(0, Math.sqrt(G / carbon.position.length()), 0);  // Initial velocity for a circular orbit
+    const G = 1000000;  // Increased gravity
+    let velocity = new THREE.Vector3(0, Math.sqrt(G / carbon.position.length()), 0);
     const dt = 0.5;
+    const earthCenter = new THREE.Vector3(0, 0, 0);
+    let oscillationPhase = 0;
 
-    function updatePositionVerlet() {
-        // Calculate the distance to the Earth's center
-        const r = carbon.position.length();
-        
-        // Calculate gravitational acceleration magnitude
-        const accelerationMagnitude = G / (r * r);
-        
-        // Calculate direction towards Earth's center
-        let directionToCenter = new THREE.Vector3().subVectors(earth.position, carbon.position).normalize();
-        
-        // Calculate acceleration vector
-        let acceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
-        
-        // Update position of carbon using current velocity and half of current acceleration
-        carbon.position.add(velocity.clone().multiplyScalar(dt)).add(acceleration.clone().multiplyScalar(0.5 * dt * dt));
-        
-        // Update positions of other atoms relative to the carbon atom's new position
-        oxygen.position.set(carbon.position.x + distanceCO, carbon.position.y, carbon.position.z);
-        hydrogen1.position.set(carbon.position.x - distanceCH, carbon.position.y + distanceCH, carbon.position.z);
-        hydrogen2.position.set(carbon.position.x - distanceCH, carbon.position.y - distanceCH, carbon.position.z);
+    // Constants for the oscillation
+    let amplitude = 500; // Amplitude of the oscillation (adjusted for visibility)
+    let omega = 2 * Math.PI; // Angular frequency
 
-        // Calculate new acceleration based on updated position
-        directionToCenter = new THREE.Vector3().subVectors(earth.position, carbon.position).normalize();
-        let newAcceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
+    let oscillationEnabled = true;  // Toggle for enabling/disabling oscillations
 
-        // Update velocity using the average of old and new acceleration
-        velocity.add(acceleration.add(newAcceleration).multiplyScalar(0.5 * dt));
+    function updateMoleculeOscillation() {
+        if (oscillationEnabled) {
+            // Oscillation logic for Hydrogen atoms in the molecule's coordinate system
+            const oscillationForceH = amplitude * Math.sin(omega * oscillationPhase);
+
+            hydrogen1.position.y = carbon.position.y + distanceCH + oscillationForceH;
+            hydrogen2.position.y = carbon.position.y - distanceCH - oscillationForceH;
+
+            // Oxygen atom follows the opposite phase of hydrogen atoms
+            oxygen.position.x = carbon.position.x + distanceCO + oscillationForceH * 0.5;
+
+            oscillationPhase += dt;
+        }
+    }
+
+    function applyCentralForce() {
+        // Calculate direction towards Earth's center for carbon atom
+        let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+        let centralForce = directionToCenter.multiplyScalar(G / carbon.position.lengthSq());
+
+        // Apply the central force to all atoms equally
+        const atoms = [carbon, oxygen, hydrogen1, hydrogen2];
+        atoms.forEach(atom => {
+            let acceleration = centralForce.clone();
+            atom.position.add(velocity.clone().multiplyScalar(dt)).add(acceleration.clone().multiplyScalar(0.5 * dt * dt));
+            velocity.add(acceleration.clone().multiplyScalar(dt));
+        });
     }
 
     function animate() {
         requestAnimationFrame(animate);
-        updatePositionVerlet();
+        updateMoleculeOscillation();
+        applyCentralForce();
         renderer.render(scene, camera);
     }
 
     animate();
+
+    // Function to toggle oscillation on/off
+    window.toggleOscillation = function() {
+        oscillationEnabled = !oscillationEnabled;
+    };
+
+    // Function to reset simulation with no oscillation
+    window.resetSimulation = function() {
+        oscillationEnabled = false;
+        velocity.set(0, Math.sqrt(G / carbon.position.length()), 0);
+        oscillationPhase = 0;
+    };
+
+    // Update amplitude and frequency based on slider input
+    document.getElementById('amplitude').addEventListener('input', (event) => {
+        amplitude = parseFloat(event.target.value);
+        document.getElementById('amplitudeValue').textContent = amplitude;
+    });
+
+    document.getElementById('frequency').addEventListener('input', (event) => {
+        omega = 2 * Math.PI * parseFloat(event.target.value);
+        document.getElementById('frequencyValue').textContent = parseFloat(event.target.value);
+    });
 </script>
 </body>
 </html>
