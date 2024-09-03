@@ -22,7 +22,7 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
-    camera.position.set(0, -9000, 0);
+    camera.position.set(0, 0, 9000);
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
     const renderer = new THREE.WebGLRenderer();
@@ -68,34 +68,41 @@
     scene.add(hydrogen2);
 
     // Position atoms relative to carbon
-    const distanceCO = 1.2 * earthRadius * 0.1; // Carbon-Oxygen bond length
-    const distanceCH = 1.0 * earthRadius * 0.1; // Carbon-Hydrogen bond length
+    const distanceCO = 1.2 * earthRadius * 0.2; // Carbon-Oxygen bond length
+    const distanceCH = 1.0 * earthRadius * 0.2; // Carbon-Hydrogen bond length
 
     carbon.position.set(earthRadius + (earthRadius * 0.1), 0, 0);
     oxygen.position.set(carbon.position.x + distanceCO, carbon.position.y, carbon.position.z);
     hydrogen1.position.set(carbon.position.x - distanceCH, carbon.position.y + distanceCH, carbon.position.z);
     hydrogen2.position.set(carbon.position.x - distanceCH, carbon.position.y - distanceCH, carbon.position.z);
 
-    let velocity = new THREE.Vector3(0, 7, 0);
-    const dt = 0.1;
-    const earthCenter = new THREE.Vector3(0, 0, 0);
-    const accelerationMagnitude = 10;
+    const G = 10000000;  // Simplified gravitational constant
+    let velocity = new THREE.Vector3(0, Math.sqrt(G / carbon.position.length()), 0);  // Initial velocity for a circular orbit
+    const dt = 0.5;
 
     function updatePositionVerlet() {
+        // Calculate the distance to the Earth's center
+        const r = carbon.position.length();
+        
+        // Calculate gravitational acceleration magnitude
+        const accelerationMagnitude = G / (r * r);
+        
         // Calculate direction towards Earth's center
-        let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+        let directionToCenter = new THREE.Vector3().subVectors(earth.position, carbon.position).normalize();
+        
+        // Calculate acceleration vector
         let acceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
-
+        
         // Update position of carbon using current velocity and half of current acceleration
         carbon.position.add(velocity.clone().multiplyScalar(dt)).add(acceleration.clone().multiplyScalar(0.5 * dt * dt));
-
+        
         // Update positions of other atoms relative to the carbon atom's new position
         oxygen.position.set(carbon.position.x + distanceCO, carbon.position.y, carbon.position.z);
         hydrogen1.position.set(carbon.position.x - distanceCH, carbon.position.y + distanceCH, carbon.position.z);
         hydrogen2.position.set(carbon.position.x - distanceCH, carbon.position.y - distanceCH, carbon.position.z);
 
         // Calculate new acceleration based on updated position
-        directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+        directionToCenter = new THREE.Vector3().subVectors(earth.position, carbon.position).normalize();
         let newAcceleration = directionToCenter.multiplyScalar(accelerationMagnitude);
 
         // Update velocity using the average of old and new acceleration
