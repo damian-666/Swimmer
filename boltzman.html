@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple LBM Simulation</title>
+    <style>
+        canvas { border: 1px solid black; }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas" width="300" height="150"></canvas>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const nx = 100; // Number of grid nodes in x
+    const ny = 50;  // Number of grid nodes in y
+    const tau = 0.6; // Relaxation time
+
+    // Lattice directions for D2Q9 model
+    const weights = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
+    const velocityVectors = [
+        [0, 0], [1, 0], [0, 1], [-1, 0], [0, -1],
+        [1, 1], [-1, 1], [-1, -1], [1, -1]
+    ];
+
+    let f = Array.from({length: 9}, () => Array(nx).fill().map(() => Array(ny).fill(1)));
+    
+    function equilibrium(rho, ux, uy) {
+        return velocityVectors.map((c, i) => {
+            const cu = 3 * (c[0] * ux + c[1] * uy);
+            return weights[i] * rho * (1 + cu + (cu * cu) / 2 - 1.5 * (ux * ux + uy * uy));
+        });
+    }
+
+    function update() {
+        const newF = Array.from({length: 9}, () => Array(nx).fill().map(() => Array(ny).fill(0)));
+
+        for (let x = 0; x < nx; x++) {
+            for (let y = 0; y < ny; y++) {
+                let rho = 0;
+                let ux = 0;
+                let uy = 0;
+
+                for (let k = 0; k < 9; k++) {
+                    rho += f[k][x][y];
+                    ux += velocityVectors[k][0] * f[k][x][y];
+                    uy += velocityVectors[k][1] * f[k][x][y];
+                }
+
+                ux /= rho;
+                uy /= rho;
+
+                const fEq = equilibrium(rho, ux, uy);
+
+                for (let k = 0; k < 9; k++) {
+                    f[k][x][y] += (fEq[k] - f[k][x][y]) / tau;
+                    
+                    const xk = (x + velocityVectors[k][0] + nx) % nx;
+                    const yk = (y + velocityVectors[k][1] + ny) % ny;
+                    
+                    newF[k][xk][yk] = f[k][x][y];
+                }
+            }
+        }
+
+        f = newF;
+        draw();
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let x = 0; x < nx; x++) {
+            for (let y = 0; y < ny; y++) {
+                const rho = f.map(val => val[x][y]).reduce((a, b) => a + b, 0);
+                const intensity = Math.min(255, Math.floor(rho * 12));
+                ctx.fillStyle = `rgb(${intensity}, ${intensity}, 255)`;
+                ctx.fillRect(x * 3, y * 3, 3, 3);
+            }
+        }
+    }
+
+    setInterval(update, 100);
+</script>
+
+</body>
+</html>
