@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple LBM Simulation</title>
+    <title>Interactive LBM Simulation</title>
     <style>
         canvas { border: 1px solid black; }
     </style>
@@ -11,16 +11,20 @@
 <body>
 
 <canvas id="canvas" width="300" height="150"></canvas>
+<div id="debug" style="font-family: monospace; margin-top: 10px;"></div>
 
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const debug = document.getElementById('debug');
 
-    const nx = 100; // Number of grid nodes in x
-    const ny = 50;  // Number of grid nodes in y
+    const nx = 100; // Grid width
+    const ny = 50;  // Grid height
     const tau = 0.6; // Relaxation time
+    const cellSize = 3; // Size of each cell
+    let isMouseDown = false;
 
-    // Lattice directions for D2Q9 model
+    // Lattice velocities and weights for D2Q9 model
     const weights = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
     const velocityVectors = [
         [0, 0], [1, 0], [0, 1], [-1, 0], [0, -1],
@@ -29,6 +33,14 @@
 
     let f = Array.from({length: 9}, () => Array(nx).fill().map(() => Array(ny).fill(1)));
     
+    function initializeLattice() {
+        for (let x = 0; x < nx; x++) {
+            for (let y = 0; y < ny; y++) {
+                f.forEach(k => k[x][y] = y > ny / 2 ? 2 : 1); // Water below, air above
+            }
+        }
+    }
+
     function equilibrium(rho, ux, uy) {
         return velocityVectors.map((c, i) => {
             const cu = 3 * (c[0] * ux + c[1] * uy);
@@ -51,17 +63,17 @@
                     uy += velocityVectors[k][1] * f[k][x][y];
                 }
 
-                ux /= rho;
-                uy /= rho;
+                ux /= rho || 1; // Avoid divide by zero
+                uy /= rho || 1; // Avoid divide by zero
 
                 const fEq = equilibrium(rho, ux, uy);
 
                 for (let k = 0; k < 9; k++) {
                     f[k][x][y] += (fEq[k] - f[k][x][y]) / tau;
-                    
+
                     const xk = (x + velocityVectors[k][0] + nx) % nx;
                     const yk = (y + velocityVectors[k][1] + ny) % ny;
-                    
+
                     newF[k][xk][yk] = f[k][x][y];
                 }
             }
@@ -76,14 +88,35 @@
         for (let x = 0; x < nx; x++) {
             for (let y = 0; y < ny; y++) {
                 const rho = f.map(val => val[x][y]).reduce((a, b) => a + b, 0);
-                const intensity = Math.min(255, Math.floor(rho * 12));
-                ctx.fillStyle = `rgb(${intensity}, ${intensity}, 255)`;
-                ctx.fillRect(x * 3, y * 3, 3, 3);
+                let color;
+                if (rho > 1.5) { 
+                    color = `rgba(0, 0, ${Math.min(rho * 100, 255)}, 0.8)`; // Blue for water with gradient
+                } else {
+                    color = `rgba(170, 220, ${Math.max(255 - rho * 100, 0)}, 0.8)`; // Light blue for air
+                }
+                ctx.fillStyle = color;
+                ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
             }
         }
+        debug.innerText = `Mouse: ${mouseX}, ${mouseY} | Density at (${mouseGridX}, ${mouseGridY}): ${f[0][mouseGridX]?.[mouseGridY]?.toFixed(2) || 'N/A'}`;
     }
 
-    setInterval(update, 100);
+    let mouseX = 0, mouseY = 0, mouseGridX = 0, mouseGridY = 0;
+    canvas.addEventListener('mousedown', () => isMouseDown = true);
+    canvas.addEventListener('mouseup', () => isMouseDown = false);
+    canvas.addEventListener('mousemove', (event) => {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = event.clientX - rect.left;
+        mouseY = event.clientY - rect.top;
+        mouseGridX = Math.floor(mouseX / cellSize);
+        mouseGridY = Math.floor(mouseY / cellSize);
+        if (isMouseDown && mouseGridX >= 0 && mouseGridX < nx && mouseGridY >= 0 && mouseGridY < ny) {
+            f.forEach(k => k[mouseGridX][mouseGridY] += 0.5); // Perturbation effect
+        }
+    });
+
+    initializeLattice();
+    setInterval(update, 100); // Update every 100 ms
 </script>
 
 </body>
