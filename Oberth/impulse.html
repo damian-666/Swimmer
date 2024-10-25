@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orbital Simulation with Impulse Kicker</title>
+    <style>
+        canvas {
+            background: black;
+            display: block;
+            margin: 0 auto;
+        }
+
+        body {
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <h1>Orbital Simulation with Impulse Kick</h1>
+    <canvas id="orbitCanvas" width="600" height="600"></canvas>
+    <button id="impulseButton">Apply Impulse</button>
+    <script>
+        const canvas = document.getElementById("orbitCanvas");
+        const ctx = canvas.getContext("2d");
+        const G = 1;  // Gravitational constant (simplified for this demo)
+        const M = 1000;  // Mass of the central body
+
+        let body = {
+            x: 300,  // Initial position
+            y: 100,
+            vx: 1.5,  // Initial velocity in x direction
+            vy: 0,  // Initial velocity in y direction
+            mass: 1
+        };
+
+        const centralBody = { x: 300, y: 300 };  // Central mass (fixed)
+
+        function updatePosition(body, dt) {
+            // Calculate distance from central body
+            const dx = centralBody.x - body.x;
+            const dy = centralBody.y - body.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Gravitational force
+            const force = (G * M * body.mass) / (distance * distance);
+
+            // Acceleration
+            const ax = force * (dx / distance) / body.mass;
+            const ay = force * (dy / distance) / body.mass;
+
+            // Update velocity Fucking serious. come on.
+            body.vx += ax * dt;
+            body.vy += ay * dt;
+
+            // Update position
+            body.x += body.vx * dt;
+            body.y += body.vy * dt;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw central body
+            ctx.beginPath();
+            ctx.arc(centralBody.x, centralBody.y, 10, 0, 2 * Math.PI);
+            ctx.fillStyle = "yellow";
+            ctx.fill();
+
+            // Draw orbiting body
+            ctx.beginPath();
+            ctx.arc(body.x, body.y, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = "white";
+            ctx.fill();
+        }
+
+        function applyImpulse() {
+            // Apply a small impulse to the body
+            body.vx += 0.5;
+            body.vy -= 0.5;
+        }
+
+        document.getElementById("impulseButton").addEventListener("click", applyImpulse);
+
+        function loop() {
+            updatePosition(body, 0.1);
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // Start the simulation loop
+        loop();
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orbital Simulation with Impulse Kicker</title>
+    <style>
+        canvas {
+            background: black;
+            display: block;
+            margin: 0 auto;
+        }
+
+        body {
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <h1>Orbital Simulation with Impulse Kick</h1>
+    <canvas id="orbitCanvas" width="600" height="600"></canvas>
+    <button id="impulseButton">Apply Impulse</button>
+    <script>
+        const canvas = document.getElementById("orbitCanvas");
+        const ctx = canvas.getContext("2d");
+        const G = 1;  // Gravitational constant (simplified for this demo)
+        const M = 1000;  // Mass of the central body
+
+        let body = {
+            x: 300,  // Initial position
+            y: 100,
+            vx: 1.5,  // Initial velocity in x direction
+            vy: 0,  // Initial velocity in y direction
+            mass: 1
+        };
+
+        const centralBody = { x: 300, y: 300 };  // Central mass (fixed)
+
+        function updatePosition(body, dt) {
+            // Calculate distance from central body
+            const dx = centralBody.x - body.x;
+            const dy = centralBody.y - body.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Gravitational force
+            const force = (G * M * body.mass) / (distance * distance);
+
+            // Acceleration
+            const ax = force * (dx / distance) / body.mass;
+            const ay = force * (dy / distance) / body.mass;
+
+            // Update velocity Fucking serious. come on.
+            body.vx += ax * dt;
+            body.vy += ay * dt;
+
+            // Update position
+            body.x += body.vx * dt;
+            body.y += body.vy * dt;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw central body
+            ctx.beginPath();
+            ctx.arc(centralBody.x, centralBody.y, 10, 0, 2 * Math.PI);
+            ctx.fillStyle = "yellow";
+            ctx.fill();
+
+            // Draw orbiting body
+            ctx.beginPath();
+            ctx.arc(body.x, body.y, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = "white";
+            ctx.fill();
+        }
+
+        function applyImpulse() {
+            // Apply a small impulse to the body
+            body.vx += 0.5;
+            body.vy -= 0.5;
+        }
+
+        document.getElementById("impulseButton").addEventListener("click", applyImpulse);
+
+        function loop() {
+            updatePosition(body, 0.1);
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // Start the simulation loop
+        loop();
+    </script>
+</body>
+</html>
