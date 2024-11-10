@@ -20,54 +20,55 @@
 <body>
     <h1>Orbital Simulation with Impulse Kick</h1>
     <canvas id="orbitCanvas" width="600" height="600"></canvas>
+    <label for="impulseSlider">Impulse Magnitude:</label>
+    <input type="range" id="impulseSlider" min="0.1" max="5" step="0.1" value="1.5">
     <button id="impulseButton">Apply Impulse</button>
     <script>
         const canvas = document.getElementById("orbitCanvas");
         const ctx = canvas.getContext("2d");
-        const G = 1;  // Gravitational constant (simplified)
+        const G = 1;  // Simplified gravitational constant
         const M = 1000;  // Mass of the central body
 
-        // Main body representing the satellite
         let body = {
-            x: 300, y: 100,  // Initial position
-            vx: 0.5, vy: 1.0,  // Initial velocity
-            mass: 200  // Mass of main body
+            x: 300, y: 100,
+            vx: 0.5, vy: 1.0,
+            mass: 200
         };
 
-        // Kicker body representing an ejected mass
         let kicker = {
-            x: body.x, y: body.y,  // Start at main body position
-            vx: 0, vy: 0,  // Initial velocity
-            mass: 20  // Mass of kicker body
+            x: body.x + 10, y: body.y + 10,
+            vx: 0.3, vy: 0.3,
+            mass: 20
         };
 
-        const centralBody = { x: 300, y: 300 };  // Fixed central mass
+        const centralBody = { x: 300, y: 300 };
+        const slider = document.getElementById("impulseSlider");
 
         function updatePosition(body, kicker, dt) {
-            // Calculate distance from central body
-            const dx = centralBody.x - body.x;
-            const dy = centralBody.y - body.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
+            const applyGravity = (obj) => {
+                const dx = centralBody.x - obj.x;
+                const dy = centralBody.y - obj.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const force = (G * M * obj.mass) / (distance * distance);
+                const ax = force * (dx / distance) / obj.mass;
+                const ay = force * (dy / distance) / obj.mass;
+                obj.vx += ax * dt;
+                obj.vy += ay * dt;
+                obj.x += obj.vx * dt;
+                obj.y += obj.vy * dt;
+            };
 
-            // Gravitational force
-            const force = (G * M * body.mass) / (distance * distance);
-            const ax = force * (dx / distance) / body.mass;
-            const ay = force * (dy / distance) / body.mass;
+            // Apply gravitational force to both bodies
+            applyGravity(body);
+            applyGravity(kicker);
 
-            // Update main body's velocity and position
-            body.vx += ax * dt;
-            body.vy += ay * dt;
-            body.x += body.vx * dt;
-            body.y += body.vy * dt;
-
-            // Magnetic-like constraint force to pull kicker back to body
+            // Magnetic-like constraint force to pull kicker back to body, simulating a slider constraint
             const kdx = body.x - kicker.x;
             const kdy = body.y - kicker.y;
             const kickerDistance = Math.sqrt(kdx * kdx + kdy * kdy);
-            const magneticForce = kickerDistance > 1 ? 0.1 / kickerDistance : 0;
-
-            kicker.vx += magneticForce * (kdx / kickerDistance);
-            kicker.vy += magneticForce * (kdy / kickerDistance);
+            const constraintForce = kickerDistance > 20 ? 0.05 : 0;
+            kicker.vx += constraintForce * (kdx / kickerDistance);
+            kicker.vy += constraintForce * (kdy / kickerDistance);
             kicker.x += kicker.vx * dt;
             kicker.y += kicker.vy * dt;
         }
@@ -75,21 +76,18 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw central body
             ctx.beginPath();
             ctx.arc(centralBody.x, centralBody.y, 10, 0, 2 * Math.PI);
             ctx.fillStyle = "yellow";
             ctx.fill();
 
-            // Draw main body (satellite)
             ctx.beginPath();
             ctx.arc(body.x, body.y, 5, 0, 2 * Math.PI);
             ctx.fillStyle = "white";
             ctx.fill();
 
-            // Draw kicker body
             ctx.beginPath();
-            ctx.arc(kicker.x, kicker.y, 3, 0, 2 * Math.PI);
+            ctx.arc(kicker.x, kicker.y, 5, 0, 2 * Math.PI);
             ctx.fillStyle = "red";
             ctx.fill();
         }
@@ -98,13 +96,12 @@
             const dx = body.x - centralBody.x;
             const dy = body.y - centralBody.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
+            const impulseMagnitude = parseFloat(slider.value);
 
-            // Apply impulse when close to perigee
             if (distance < 120) {
-                const impulseMagnitude = 1.5;  // Tunable impulse magnitude
                 body.vx += impulseMagnitude * (dx / distance);
                 body.vy += impulseMagnitude * (dy / distance);
-                kicker.vx -= impulseMagnitude * (dx / distance);  // Reaction on kicker
+                kicker.vx -= impulseMagnitude * (dx / distance);
                 kicker.vy -= impulseMagnitude * (dy / distance);
             }
         }
@@ -117,7 +114,6 @@
             requestAnimationFrame(loop);
         }
 
-        // Start the simulation loop
         loop();
     </script>
 </body>
