@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -15,45 +15,35 @@
             color: white;
             font-family: Arial, sans-serif;
         }
-        #controls {
-            margin: 20px;
-        }
     </style>
 </head>
 <body>
     <h1>Orbital Simulation with Impulse Kick</h1>
-    <div id="controls">
-        <button id="impulseButton">Apply Impulse</button>
-        <button id="autoImpulseButton">Toggle Automatic Impulse</button><br><br>
-        <label for="impulseSlider">Impulse Magnitude:</label>
-        <input type="range" id="impulseSlider" min="0" max="5" step="0.1" value="0.5">
-        <span id="impulseValue">0.5</span>
-    </div>
     <canvas id="orbitCanvas" width="600" height="600"></canvas>
+    <button id="impulseButton">Apply Impulse</button>
     <script>
         const canvas = document.getElementById("orbitCanvas");
         const ctx = canvas.getContext("2d");
-        const G = 1;  // Gravitational constant (simplified for this demo)
+        const G = 1;  // Gravitational constant (simplified)
         const M = 1000;  // Mass of the central body
-        let autoImpulse = false;
 
+        // Main body representing the satellite
         let body = {
-            x: 400,  // Initial position at perigee
-            y: 300,
-            vx: 0,  // Initial velocity in x direction
-            vy: 2.0,  // Initial velocity in y direction for elliptical orbit
-            mass: 1
+            x: 300, y: 100,  // Initial position
+            vx: 0.5, vy: 1.0,  // Initial velocity
+            mass: 200  // Mass of main body
         };
 
-        const centralBody = { x: 300, y: 300 };  // Central mass (fixed)
-        const impulseSlider = document.getElementById("impulseSlider");
-        const impulseValueDisplay = document.getElementById("impulseValue");
+        // Kicker body representing an ejected mass
+        let kicker = {
+            x: body.x, y: body.y,  // Start at main body position
+            vx: 0, vy: 0,  // Initial velocity
+            mass: 20  // Mass of kicker body
+        };
 
-        impulseSlider.addEventListener("input", () => {
-            impulseValueDisplay.textContent = impulseSlider.value;
-        });
+        const centralBody = { x: 300, y: 300 };  // Fixed central mass
 
-        function updatePosition(body, dt) {
+        function updatePosition(body, kicker, dt) {
             // Calculate distance from central body
             const dx = centralBody.x - body.x;
             const dy = centralBody.y - body.y;
@@ -61,18 +51,25 @@
 
             // Gravitational force
             const force = (G * M * body.mass) / (distance * distance);
-
-            // Acceleration
             const ax = force * (dx / distance) / body.mass;
             const ay = force * (dy / distance) / body.mass;
 
-            // Update velocity
+            // Update main body's velocity and position
             body.vx += ax * dt;
             body.vy += ay * dt;
-
-            // Update position
             body.x += body.vx * dt;
             body.y += body.vy * dt;
+
+            // Magnetic-like constraint force to pull kicker back to body
+            const kdx = body.x - kicker.x;
+            const kdy = body.y - kicker.y;
+            const kickerDistance = Math.sqrt(kdx * kdx + kdy * kdy);
+            const magneticForce = kickerDistance > 1 ? 0.1 / kickerDistance : 0;
+
+            kicker.vx += magneticForce * (kdx / kickerDistance);
+            kicker.vy += magneticForce * (kdy / kickerDistance);
+            kicker.x += kicker.vx * dt;
+            kicker.y += kicker.vy * dt;
         }
 
         function draw() {
@@ -84,60 +81,38 @@
             ctx.fillStyle = "yellow";
             ctx.fill();
 
-            // Draw gravity vector
-            ctx.beginPath();
-            ctx.moveTo(body.x, body.y);
-            ctx.lineTo(centralBody.x, centralBody.y);
-            ctx.strokeStyle = "red";
-            ctx.stroke();
-
-            // Draw orbiting body
+            // Draw main body (satellite)
             ctx.beginPath();
             ctx.arc(body.x, body.y, 5, 0, 2 * Math.PI);
             ctx.fillStyle = "white";
             ctx.fill();
+
+            // Draw kicker body
+            ctx.beginPath();
+            ctx.arc(kicker.x, kicker.y, 3, 0, 2 * Math.PI);
+            ctx.fillStyle = "red";
+            ctx.fill();
         }
 
         function applyImpulse() {
-            // Apply an impulse to the body directed away from the central body
             const dx = body.x - centralBody.x;
             const dy = body.y - centralBody.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            const impulseMagnitude = parseFloat(impulseSlider.value);
-            body.vx += impulseMagnitude * (dx / distance);
-            body.vy += impulseMagnitude * (dy / distance);
+
+            // Apply impulse when close to perigee
+            if (distance < 120) {
+                const impulseMagnitude = 1.5;  // Tunable impulse magnitude
+                body.vx += impulseMagnitude * (dx / distance);
+                body.vy += impulseMagnitude * (dy / distance);
+                kicker.vx -= impulseMagnitude * (dx / distance);  // Reaction on kicker
+                kicker.vy -= impulseMagnitude * (dy / distance);
+            }
         }
 
         document.getElementById("impulseButton").addEventListener("click", applyImpulse);
 
-        document.getElementById("autoImpulseButton").addEventListener("click", () => {
-            autoImpulse = !autoImpulse;
-        });
-
-        window.addEventListener("keydown", (event) => {
-            if (event.key === "w" || event.key === "W") {
-                applyImpulse();
-            } else if (event.key === "s" || event.key === "S") {
-                // Retract impulse (apply in opposite direction)
-                const dx = body.x - centralBody.x;
-                const dy = body.y - centralBody.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const impulseMagnitude = parseFloat(impulseSlider.value);
-                body.vx -= impulseMagnitude * (dx / distance);
-                body.vy -= impulseMagnitude * (dy / distance);
-            }
-        });
-
         function loop() {
-            updatePosition(body, 0.2);
-            if (autoImpulse) {
-                const dx = body.x - centralBody.x;
-                const dy = body.y - centralBody.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance < 310 && distance > 290) { // Near perigee
-                    applyImpulse();
-                }
-            }
+            updatePosition(body, kicker, 0.1);
             draw();
             requestAnimationFrame(loop);
         }
@@ -147,4 +122,3 @@
     </script>
 </body>
 </html>
-
