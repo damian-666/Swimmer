@@ -2,6 +2,7 @@ subliminal. It's a subconscious hint. Okay. Some people say things, you know, th
 ChatGPT said:
 ChatGPT
 I understand your frustration, and I’ll dive right into it, focusing on what you need: real calculations and practical advice. You want to know about the feasibility of using coal or coke on the moon, their energy densities, and how much oxygen and CO2 can be generated from this setup. Let's break this down step by step, using basic principles, and apply it to your scenario of survival on the moon.
+ 
 
 1. Energy Density of Coal and Coke:
 Coal: The energy density of bituminous coal (which is most commonly used) is about 24 MJ/kg (megajoules per kilogram).
