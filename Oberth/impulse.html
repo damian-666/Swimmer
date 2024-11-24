@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>3D Orbital Simulation with Impulse Kicker</title>
+    <title>Enhanced 3D Orbital Simulation with Tether</title>
     <style>
         body {
             margin: 0;
@@ -20,14 +20,15 @@
             padding: 10px;
         }
 
+        #ui label,
         #ui button,
         #ui input {
             margin-bottom: 5px;
             display: block;
+        }
+
+        #ui input[type="range"] {
             width: 100%;
-            padding: 5px;
-            border-radius: 3px;
-            border: 1px solid #ccc;
         }
 
         canvas {
@@ -36,19 +37,6 @@
             position: fixed;
             top: 0;
             left: 0;
-        }
-
-        #text-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 24px;
-            text-align: center;
-            z-index: 200;
-            pointer-events: none;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         #info {
@@ -60,9 +48,15 @@
 
 <body>
     <div id="ui">
+        <label for="maxTetherLengthSlider">Max Tether Length (km):</label>
+        <input type="range" id="maxTetherLengthSlider" min="50" max="500" step="10" value="200"><br>
+
         <label for="impulseSlider">Impulse Magnitude:</label>
         <input type="range" id="impulseSlider" min="0" max="50" step="1" value="10"><br>
-        <button id="impulseButton">Apply Impulse</button>
+
+        <button id="extendTetherButton">Extend Tether at Apogee</button>
+        <button id="retractTetherButton">Retract Tether at Perigee</button>
+
         <span id="info"></span>
     </div>
 
@@ -103,13 +97,13 @@
         const G = 6.67430e-11; // Gravitational constant (m^3 kg^-1 s^-2)
         const earthMass = 5.972e24; // Mass of Earth (kg)
         const earthRadius = 6.371e6; // Radius of Earth (m)
-        const timeStep = 0.1; // seconds per simulation step
+        const timeStep = 1; // seconds per simulation step
         const scale = 1e-6; // Scale factor for rendering
 
-        // Create camera
+        // Create camera (Top-Down View)
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0 * scale, -1e7 * scale, 3e7 * scale); // Apply scaling
-        camera.up.set(0, 0, 1);
+        camera.position.set(0, 0, 50); // Top view
+        camera.up.set(0, 1, 0);
         camera.lookAt(0, 0, 0);
 
         // Create renderer
@@ -122,7 +116,6 @@
         controls.enableDamping = true; // Enable inertial damping
         controls.dampingFactor = 0.05;
         controls.zoomSpeed = 1.2;
-        controls.enablePan = false; // Disable panning to prevent unnecessary movement
 
         // Add Earth
         const earthGeometry = new THREE.SphereGeometry(earthRadius * scale, 64, 64);
@@ -150,16 +143,20 @@
 
         // Satellite (200 kg)
         const satelliteMass = 200; // kg
-        const orbitAltitude = 200000; // Orbit altitude above Earth's surface (200 km)
+        const orbitAltitude = 400000; // Orbit altitude above Earth's surface (400 km)
         const orbitRadius = earthRadius + orbitAltitude; // Orbit radius from Earth's center (m)
         const satellitePosition = new THREE.Vector3(orbitRadius, 0, 0); // Starting position
-        const orbitalSpeed = Math.sqrt(G * earthMass / orbitRadius); // m/s
+        let orbitalSpeed = Math.sqrt(G * earthMass / orbitRadius); // m/s
+        orbitalSpeed *= 1.1; // Increase speed for a faster orbit
         const satelliteVelocity = new THREE.Vector3(0, orbitalSpeed, 0);
 
         // Kicker (10 kg)
         const kickerMass = 10; // kg
-        const kickerOffset = new THREE.Vector3(0, 0, 10000); // Offset from satellite (10 km)
-        const kickerPosition = satellitePosition.clone().add(kickerOffset);
+        const initialTetherLength = 100000; // Initial tether length (100 km)
+        let maxTetherLength = parseFloat(document.getElementById('maxTetherLengthSlider').value) * 1000; // Max tether length from slider
+        let tetherLength = initialTetherLength; // Current tether length
+        const tetherDirection = new THREE.Vector3(0, 0, 1); // Direction of the tether
+        const kickerPosition = satellitePosition.clone().add(tetherDirection.clone().multiplyScalar(tetherLength));
         const kickerVelocity = satelliteVelocity.clone();
 
         // Create visual representations
@@ -175,11 +172,29 @@
         const kickerMesh = new THREE.Mesh(kickerGeometry, kickerMaterial);
         scene.add(kickerMesh);
 
+        // Tether visualization
+        const tetherMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
+        const tetherGeometry = new THREE.BufferGeometry();
+        const tetherLine = new THREE.Line(tetherGeometry, tetherMaterial);
+        scene.add(tetherLine);
+
         // UI Elements
         const impulseSlider = document.getElementById('impulseSlider');
+        const maxTetherLengthSlider = document.getElementById('maxTetherLengthSlider');
+        let extendTether = false;
+        let retractTether = false;
         let impulseApplied = false;
-        document.getElementById('impulseButton').addEventListener('click', () => {
-            impulseApplied = true;
+
+        document.getElementById('extendTetherButton').addEventListener('click', () => {
+            extendTether = true;
+        });
+
+        document.getElementById('retractTetherButton').addEventListener('click', () => {
+            retractTether = true;
+        });
+
+        maxTetherLengthSlider.addEventListener('input', () => {
+            maxTetherLength = parseFloat(maxTetherLengthSlider.value) * 1000; // Convert km to m
         });
 
         // Simulation loop
@@ -192,6 +207,17 @@
             // Update mesh positions
             satelliteMesh.position.copy(satellitePosition.clone().multiplyScalar(scale));
             kickerMesh.position.copy(kickerPosition.clone().multiplyScalar(scale));
+
+            // Update kicker orientation to point toward Earth's center
+            const toEarth = satellitePosition.clone().negate().normalize();
+            kickerMesh.lookAt(kickerPosition.clone().add(toEarth));
+
+            // Update tether visualization
+            const tetherPoints = [
+                satelliteMesh.position.clone(),
+                kickerMesh.position.clone()
+            ];
+            tetherGeometry.setFromPoints(tetherPoints);
 
             // Render scene
             controls.update();
@@ -209,34 +235,51 @@
             const kickForceMag = (G * earthMass * kickerMass) / (kickDistance * kickDistance);
             const kickAcceleration = kickerPosition.clone().negate().normalize().multiplyScalar(kickForceMag / kickerMass);
 
-            // Linear constraint force between satellite and kicker
+            // Tether force between satellite and kicker
             const separation = kickerPosition.clone().sub(satellitePosition);
             const separationDistance = separation.length();
-            const maxSeparation = 2e4; // Maximum separation distance (20 km)
 
+            // Check for extension or retraction at apogee or perigee
+            const radialVelocity = satellitePosition.clone().dot(satelliteVelocity.clone().normalize());
+            if (extendTether && radialVelocity > 0) {
+                // At apogee, extend tether
+                if (separationDistance < maxTetherLength) {
+                    const extendForceMag = parseFloat(impulseSlider.value); // Use impulse slider value
+                    const extendForce = separation.normalize().multiplyScalar(extendForceMag);
+
+                    // Apply equal and opposite forces
+                    satelliteVelocity.add(extendForce.clone().multiplyScalar(timeStep / satelliteMass));
+                    kickerVelocity.add(extendForce.clone().negate().multiplyScalar(timeStep / kickerMass));
+                }
+                extendTether = false; // Reset after applying force
+            }
+
+            if (retractTether && radialVelocity < 0) {
+                // At perigee, retract tether
+                if (separationDistance > initialTetherLength) {
+                    const retractForceMag = parseFloat(impulseSlider.value); // Use impulse slider value
+                    const retractForce = separation.normalize().multiplyScalar(-retractForceMag);
+
+                    // Apply equal and opposite forces
+                    satelliteVelocity.add(retractForce.clone().multiplyScalar(timeStep / satelliteMass));
+                    kickerVelocity.add(retractForce.clone().negate().multiplyScalar(timeStep / kickerMass));
+                }
+                retractTether = false; // Reset after applying force
+            }
+
+            // Tether constraint
+            const maxSeparation = maxTetherLength;
             if (separationDistance > maxSeparation) {
-                const constraintForceMag = 0.01 * (separationDistance - maxSeparation);
-                const constraintForce = separation.normalize().multiplyScalar(-constraintForceMag);
+                // Apply damping to prevent exceeding max tether length
+                const dampingForceMag = 0.1 * (separationDistance - maxSeparation);
+                const dampingForce = separation.normalize().multiplyScalar(-dampingForceMag);
 
-                // Apply to satellite
-                const satConstraintAccel = constraintForce.clone().divideScalar(satelliteMass);
-                satelliteVelocity.add(satConstraintAccel.multiplyScalar(timeStep));
-
-                // Apply to kicker
-                const kickConstraintAccel = constraintForce.clone().negate().divideScalar(kickerMass);
-                kickerVelocity.add(kickConstraintAccel.multiplyScalar(timeStep));
+                // Apply forces
+                satelliteVelocity.add(dampingForce.clone().multiplyScalar(timeStep / satelliteMass));
+                kickerVelocity.add(dampingForce.clone().negate().multiplyScalar(timeStep / kickerMass));
             }
 
-            // Apply impulse when button is pressed
-            if (impulseApplied) {
-                const impulseDirection = satellitePosition.clone().normalize();
-                const impulseMagnitude = parseFloat(impulseSlider.value);
-                satelliteVelocity.add(impulseDirection.multiplyScalar(impulseMagnitude / satelliteMass));
-                kickerVelocity.add(impulseDirection.clone().multiplyScalar(-impulseMagnitude / kickerMass));
-                impulseApplied = false;
-            }
-
-            // Update velocities
+            // Update velocities with gravitational acceleration
             satelliteVelocity.add(satAcceleration.multiplyScalar(timeStep));
             kickerVelocity.add(kickAcceleration.multiplyScalar(timeStep));
 
