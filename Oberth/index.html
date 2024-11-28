@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Enhanced 3D Orbital Simulation with Tether</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            z-index: 100;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+        }
+
+        #ui label,
+        #ui button,
+        #ui input {
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        #ui input[type="range"] {
+            width: 100%;
+        }
+
+        canvas {
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        #info {
+            display: block;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <label for="maxTetherLengthSlider">Max Tether Length (km):</label>
+        <input type="range" id="maxTetherLengthSlider" min="50" max="500" step="10" value="200"><br>
+
+        <label for="impulseSlider">Impulse Magnitude:</label>
+        <input type="range" id="impulseSlider" min="0" max="50" step="1" value="10"><br>
+
+        <button id="extendTetherButton">Extend Tether at Apogee</button>
+        <button id="retractTetherButton">Retract Tether at Perigee</button>
+
+        <span id="info"></span>
+    </div>
+
+    <!-- Include Three.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <!-- Include OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // Create scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000); // Black background for space
+
+        // Add AxesHelper for visualization
+        const axesHelper = new THREE.AxesHelper(10);
+        scene.add(axesHelper);
+
+        // Add ambient light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        // Add directional light (sunlight)
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        // Adjust wireframe material settings
+        const earthMaterial = new THREE.MeshPhongMaterial({
+            color: 0x2233ff,
+            wireframe: true,
+            wireframeLinewidth: 2,
+            emissive: 0x112244,
+            transparent: true,
+            opacity: 0.9
+        });
+
+        // Constants
+        const G = 6.67430e-11; // Gravitational constant (m^3 kg^-1 s^-2)
+        const earthMass = 5.972e24; // Mass of Earth (kg)
+        const earthRadius = 6.371e6; // Radius of Earth (m)
+        const timeStep = 1; // seconds per simulation step
+        const scale = 1e-6; // Scale factor for rendering
+
+        // Create camera (Top-Down View)
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 50); // Top view
+        camera.up.set(0, 1, 0);
+        camera.lookAt(0, 0, 0);
+
+        // Create renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Add OrbitControls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; // Enable inertial damping
+        controls.dampingFactor = 0.05;
+        controls.zoomSpeed = 1.2;
+
+        // Add Earth
+        const earthGeometry = new THREE.SphereGeometry(earthRadius * scale, 64, 64);
+        const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+        scene.add(earthMesh);
+
+        // Great circles (geodesic lines)
+        const circleMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+        for (let i = 0; i < 12; i++) {
+            const circlePoints = [];
+            const segments = 128;
+            const radius = earthRadius * scale;
+            for (let j = 0; j <= segments; j++) {
+                const theta = (j / segments) * 2 * Math.PI;
+                const x = radius * Math.cos(theta);
+                const y = radius * Math.sin(theta);
+                circlePoints.push(new THREE.Vector3(x, y, 0));
+            }
+            const circleGeometry = new THREE.BufferGeometry().setFromPoints(circlePoints);
+            const circle = new THREE.Line(circleGeometry, circleMaterial);
+            circle.rotation.x = Math.PI / 2;
+            circle.rotation.z = (Math.PI / 6) * i;
+            scene.add(circle);
+        }
+
+        // Satellite (200 kg)
+        const satelliteMass = 200; // kg
+        const orbitAltitude = 400000; // Orbit altitude above Earth's surface (400 km)
+        const orbitRadius = earthRadius + orbitAltitude; // Orbit radius from Earth's center (m)
+        const satellitePosition = new THREE.Vector3(orbitRadius, 0, 0); // Starting position
+        let orbitalSpeed = Math.sqrt(G * earthMass / orbitRadius); // m/s
+        orbitalSpeed *= 1.1; // Increase speed for a faster orbit
+        const satelliteVelocity = new THREE.Vector3(0, orbitalSpeed, 0);
+
+        // Kicker (10 kg)
+        const kickerMass = 10; // kg
+        const initialTetherLength = 100000; // Initial tether length (100 km)
+        let maxTetherLength = parseFloat(document.getElementById('maxTetherLengthSlider').value) * 1000; // Max tether length from slider
+        let tetherLength = initialTetherLength; // Current tether length
+        const tetherDirection = new THREE.Vector3(0, 0, 1); // Direction of the tether
+        const kickerPosition = satellitePosition.clone().add(tetherDirection.clone().multiplyScalar(tetherLength));
+        const kickerVelocity = satelliteVelocity.clone();
+
+        // Create visual representations
+        const satelliteSize = 1e5 * scale;
+        const satelliteGeometry = new THREE.BoxGeometry(satelliteSize, satelliteSize, satelliteSize);
+        const satelliteMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const satelliteMesh = new THREE.Mesh(satelliteGeometry, satelliteMaterial);
+        scene.add(satelliteMesh);
+
+        const kickerSize = 5e4 * scale;
+        const kickerGeometry = new THREE.BoxGeometry(kickerSize, kickerSize, kickerSize);
+        const kickerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const kickerMesh = new THREE.Mesh(kickerGeometry, kickerMaterial);
+        scene.add(kickerMesh);
+
+        // Tether visualization
+        const tetherMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
+        const tetherGeometry = new THREE.BufferGeometry();
+        const tetherLine = new THREE.Line(tetherGeometry, tetherMaterial);
+        scene.add(tetherLine);
+
+        // UI Elements
+        const impulseSlider = document.getElementById('impulseSlider');
+        const maxTetherLengthSlider = document.getElementById('maxTetherLengthSlider');
+        let extendTether = false;
+        let retractTether = false;
+        let impulseApplied = false;
+
+        document.getElementById('extendTetherButton').addEventListener('click', () => {
+            extendTether = true;
+        });
+
+        document.getElementById('retractTetherButton').addEventListener('click', () => {
+            retractTether = true;
+        });
+
+        maxTetherLengthSlider.addEventListener('input', () => {
+            maxTetherLength = parseFloat(maxTetherLengthSlider.value) * 1000; // Convert km to m
+        });
+
+        // Simulation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update positions and velocities
+            updatePositions();
+
+            // Update mesh positions
+            satelliteMesh.position.copy(satellitePosition.clone().multiplyScalar(scale));
+            kickerMesh.position.copy(kickerPosition.clone().multiplyScalar(scale));
+
+            // Update kicker orientation to point toward Earth's center
+            const toEarth = satellitePosition.clone().negate().normalize();
+            kickerMesh.lookAt(kickerPosition.clone().add(toEarth));
+
+            // Update tether visualization
+            const tetherPoints = [
+                satelliteMesh.position.clone(),
+                kickerMesh.position.clone()
+            ];
+            tetherGeometry.setFromPoints(tetherPoints);
+
+            // Render scene
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function updatePositions() {
+            // Gravitational force on satellite
+            const satDistance = satellitePosition.length();
+            const satForceMag = (G * earthMass * satelliteMass) / (satDistance * satDistance);
+            const satAcceleration = satellitePosition.clone().negate().normalize().multiplyScalar(satForceMag / satelliteMass);
+
+            // Gravitational force on kicker
+            const kickDistance = kickerPosition.length();
+            const kickForceMag = (G * earthMass * kickerMass) / (kickDistance * kickDistance);
+            const kickAcceleration = kickerPosition.clone().negate().normalize().multiplyScalar(kickForceMag / kickerMass);
+
+            // Tether force between satellite and kicker
+            const separation = kickerPosition.clone().sub(satellitePosition);
+            const separationDistance = separation.length();
+
+            // Check for extension or retraction at apogee or perigee
+            const radialVelocity = satellitePosition.clone().dot(satelliteVelocity.clone().normalize());
+            if (extendTether && radialVelocity > 0) {
+                // At apogee, extend tether
+                if (separationDistance < maxTetherLength) {
+                    const extendForceMag = parseFloat(impulseSlider.value); // Use impulse slider value
+                    const extendForce = separation.normalize().multiplyScalar(extendForceMag);
+
+                    // Apply equal and opposite forces
+                    satelliteVelocity.add(extendForce.clone().multiplyScalar(timeStep / satelliteMass));
+                    kickerVelocity.add(extendForce.clone().negate().multiplyScalar(timeStep / kickerMass));
+                }
+                extendTether = false; // Reset after applying force
+            }
+
+            if (retractTether && radialVelocity < 0) {
+                // At perigee, retract tether
+                if (separationDistance > initialTetherLength) {
+                    const retractForceMag = parseFloat(impulseSlider.value); // Use impulse slider value
+                    const retractForce = separation.normalize().multiplyScalar(-retractForceMag);
+
+                    // Apply equal and opposite forces
+                    satelliteVelocity.add(retractForce.clone().multiplyScalar(timeStep / satelliteMass));
+                    kickerVelocity.add(retractForce.clone().negate().multiplyScalar(timeStep / kickerMass));
+                }
+                retractTether = false; // Reset after applying force
+            }
+
+            // Tether constraint
+            const maxSeparation = maxTetherLength;
+            if (separationDistance > maxSeparation) {
+                // Apply damping to prevent exceeding max tether length
+                const dampingForceMag = 0.1 * (separationDistance - maxSeparation);
+                const dampingForce = separation.normalize().multiplyScalar(-dampingForceMag);
+
+                // Apply forces
+                satelliteVelocity.add(dampingForce.clone().multiplyScalar(timeStep / satelliteMass));
+                kickerVelocity.add(dampingForce.clone().negate().multiplyScalar(timeStep / kickerMass));
+            }
+
+            // Update velocities with gravitational acceleration
+            satelliteVelocity.add(satAcceleration.multiplyScalar(timeStep));
+            kickerVelocity.add(kickAcceleration.multiplyScalar(timeStep));
+
+            // Update positions
+            satellitePosition.add(satelliteVelocity.clone().multiplyScalar(timeStep));
+            kickerPosition.add(kickerVelocity.clone().multiplyScalar(timeStep));
+        }
+
+        // Start animation
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+
+</html>
