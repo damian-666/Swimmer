@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed-Point T-Shape Molecular Dynamics</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        #controls label {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="controls">
+        <label>
+            Spring Constant: <span id="springConstantValue">100</span>
+            <input type="range" id="springConstant" min="10" max="300" step="10" value="100">
+        </label>
+        <button onclick="resetSimulation()">Reset Simulation</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.121.1/build/three.module.js';
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.set(0, 0, 500);
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const G = 0.1; // Gravitational constant for the simulation
+        const BIG_INT = 1000000000;
+
+        function X2F(x) { return (+x) / BIG_INT; }
+        function F2X(f) { return ((f * BIG_INT) | 0); }
+
+        // Atom structure
+        function Atom(x, y, mass, color) {
+            this.position = new THREE.Vector3(F2X(x), F2X(y), 0);
+            this.velocity = new THREE.Vector3(0, 0, 0);
+            this.mass = mass;
+            this.mesh = createSphereMesh(color);
+            updateMeshPosition(this);
+        }
+
+        function createSphereMesh(color) {
+            const geometry = new THREE.SphereGeometry(5, 32, 32);
+            const material = new THREE.MeshBasicMaterial({ color });
+            return new THREE.Mesh(geometry, material);
+        }
+
+        function updateMeshPosition(atom) {
+            atom.mesh.position.set(X2F(atom.position.x), X2F(atom.position.y), 0);
+        }
+
+        // Create atoms
+        const carbon = new Atom(0, 0, 12, 0xffa500); // Carbon
+        const oxygen = new Atom(150, 0, 16, 0xff0000); // Oxygen
+        const hydrogen1 = new Atom(-150, 150, 1, 0x00ff00); // Hydrogen 1
+        const hydrogen2 = new Atom(-150, -150, 1, 0x00ff00); // Hydrogen 2
+
+        scene.add(carbon.mesh);
+        scene.add(oxygen.mesh);
+        scene.add(hydrogen1.mesh);
+        scene.add(hydrogen2.mesh);
+
+        let springConstant = 100; // Default spring constant
+
+        // Function to apply spring force between two atoms
+        function applySpringForce(atom1, atom2, k) {
+            const direction = atom2.position.clone().sub(atom1.position);
+            const distance = direction.length();
+            const forceMagnitude = k * (distance - F2X(150)); // Assuming 150 is the resting distance
+            direction.normalize().multiplyScalar(forceMagnitude);
+
+            const force = direction.clone().multiplyScalar(BIG_INT);
+            atom1.velocity.add(force.clone().divideScalar(atom1.mass));
+            atom2.velocity.sub(force.clone().divideScalar(atom2.mass));
+        }
+
+        // Apply gravitational force towards Earth
+        function applyGravity(atom) {
+            const direction = new THREE.Vector3(0, 0, 0).sub(atom.position);
+            const distance = direction.length();
+            const forceMagnitude = G * atom.mass / (distance * distance);
+            direction.normalize().multiplyScalar(forceMagnitude);
+
+            const force = direction.clone().multiplyScalar(BIG_INT);
+            atom.velocity.add(force.divideScalar(atom.mass));
+        }
+
+        // Integrate positions and velocities using fixed-point arithmetic
+        function integrate() {
+            // Apply forces
+            applySpringForce(carbon, hydrogen1, springConstant);
+            applySpringForce(carbon, hydrogen2, springConstant);
+            applySpringForce(carbon, oxygen, springConstant);
+
+            applyGravity(carbon);
+            applyGravity(hydrogen1);
+            applyGravity(hydrogen2);
+            applyGravity(oxygen);
+
+            const atoms = [carbon, hydrogen1, hydrogen2, oxygen];
+            // Update positions based on velocities
+            for (let atom of atoms) {
+                atom.position.add(atom.velocity.clone());
+                updateMeshPosition(atom);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            integrate(); // Integrate positions and velocities
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.resetSimulation = function () {
+            carbon.position.set(F2X(0), F2X(0), 0);
+            oxygen.position.set(F2X(150), F2X(0), 0);
+            hydrogen1.position.set(F2X(-150), F2X(150), 0);
+            hydrogen2.position.set(F2X(-150), F2X(-150), 0);
+            carbon.velocity.set(0, 0, 0);
+            oxygen.velocity.set(0, 0, 0);
+            hydrogen1.velocity.set(0, 0, 0);
+            hydrogen2.velocity.set(0, 0, 0);
+            updateMeshPosition(carbon);
+            updateMeshPosition(oxygen);
+            updateMeshPosition(hydrogen1);
+            updateMeshPosition(hydrogen2);
+        };
+
+        document.getElementById('springConstant').addEventListener('input', (event) => {
+            springConstant = parseFloat(event.target.value);
+            document.getElementById('springConstantValue').textContent = springConstant;
+        });
+    </script>
+</body>
+
+</html>

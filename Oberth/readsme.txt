@@ -1,0 +1,11 @@
+index copyu is code..  
+
+needs the code merged in 
+
+camera.. iinit view.. fromo index. latest.. then 
+direction is wrong
+
+clamp to zero..   maybe use fixed..
+
+mabyhe interget
+cuse calused
