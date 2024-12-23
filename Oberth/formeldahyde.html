@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orbit Simulation - Formaldehyde Molecule</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        #controls label {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info"></div>
+    <div id="controls">
+        <label>
+            Amplitude: <span id="amplitudeValue">500</span>
+            <input type="range" id="amplitude" min="100" max="1000" step="10" value="500">
+        </label>
+        <label>
+            Frequency: <span id="frequencyValue">0.2</span>
+            <input type="range" id="frequency" min="0.1" max="10" step="0.01" value=0.2">
+        </label>
+        <button onclick="toggleOscillation()">Toggle Oscillation</button>
+        <button onclick="resetSimulation()">Reset Simulation</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.121.1/build/three.module.js';
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.set(0, 0, 9000);
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+
+        const floatScale = 1000;
+
+        const earthRadius = 4 * floatScale;
+        const G = floatScale * 10;  // Adjusted gravity constant based on your simulation needs
+
+        const earthGeometry = new THREE.SphereGeometry(earthRadius, 32, 32);
+        const earthMaterial = new THREE.MeshBasicMaterial({ color: 0x123456, wireframe: true });
+        const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+        scene.add(earth);
+
+        // Adding great circles for longitude every 6 degrees
+        for (let i = 0; i < 360; i += 6) {
+            let longitudeGeometry = new THREE.CircleGeometry(earthRadius, 64);
+            longitudeGeometry.vertices.shift(); // remove the center vertex
+            longitudeGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+            longitudeGeometry.applyMatrix4(new THREE.Matrix4().makeRotationZ(THREE.Math.degToRad(i)));
+            let longitudeMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
+            let longitudeLine = new THREE.LineLoop(longitudeGeometry, longitudeMaterial);
+            scene.add(longitudeLine);
+        }
+
+        const carbonGeometry = new THREE.SphereGeometry(earthRadius * 0.1, 32, 32);
+        const carbonMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500 });
+        const carbon = new THREE.Mesh(carbonGeometry, carbonMaterial);
+        scene.add(carbon);
+
+        const oxygenGeometry = new THREE.SphereGeometry(earthRadius * 0.12, 32, 32);
+        const oxygenMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const oxygen = new THREE.Mesh(oxygenGeometry, oxygenMaterial);
+        scene.add(oxygen);
+
+        const hydrogenGeometry = new THREE.SphereGeometry(earthRadius * 0.05, 32, 32);
+        const hydrogenMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const hydrogen1 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
+        const hydrogen2 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
+        scene.add(hydrogen1);
+        scene.add(hydrogen2);
+
+        const distanceCO = 1.2 * earthRadius * 0.2;
+        const distanceCH = 1.0 * earthRadius * 0.2;
+
+        carbon.position.set(earthRadius + (earthRadius * 0.1), 0, 0);
+        oxygen.position.set(carbon.position.x + distanceCO, carbon.position.y, carbon.position.z);
+        hydrogen1.position.set(carbon.position.x - distanceCH, carbon.position.y + distanceCH, carbon.position.z);
+        hydrogen2.position.set(carbon.position.x - distanceCH, carbon.position.y - distanceCH, carbon.position.z);
+
+        const initialRadius = carbon.position.length();
+        // let velocity = new THREE.Vector3(0, Math.sqrt(G / initialRadius), 0);
+        let velocity = new THREE.Vector3(0, G / initialRadius, 0);
+        const dt = 0.25;  // Reduced dt for better accuracy
+        const earthCenter = new THREE.Vector3(0, 0, 0);
+        let oscillationPhase = 0;
+
+        // Constants for the oscillation
+        let amplitude = 500; // Amplitude of the oscillation
+        let omega = 2 * Math.PI; // Angular frequency
+
+        let oscillationEnabled = true;  // Toggle for enabling/disabling oscillations
+
+        function updateMoleculeOscillation() {
+            if (oscillationEnabled) {
+                const oscillationForceH = amplitude * Math.sin(omega * oscillationPhase);
+
+                hydrogen1.position.y = carbon.position.y + distanceCH + oscillationForceH;
+                hydrogen2.position.y = carbon.position.y - distanceCH - oscillationForceH;
+
+                oxygen.position.x = carbon.position.x + distanceCO + oscillationForceH * 0.5;
+
+                oscillationPhase += dt;
+            }
+        }
+
+
+
+
+
+        function applyCentralForce() {
+            let directionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+            let centralForce = directionToCenter.multiplyScalar(G / carbon.position.lengthSq());
+
+            const atoms = [carbon, oxygen, hydrogen1, hydrogen2];
+            atoms.forEach(atom => {
+                let acceleration = centralForce.clone();
+                atom.position.add(velocity.clone().multiplyScalar(dt)).add(acceleration.clone().multiplyScalar(0.5 * dt * dt));
+
+                let newDirectionToCenter = earthCenter.clone().sub(carbon.position).normalize();
+                let newCentralForce = newDirectionToCenter.multiplyScalar(G / carbon.position.lengthSq());
+
+                let newAcceleration = newCentralForce.clone();
+                velocity.add(acceleration.add(newAcceleration).multiplyScalar(0.5 * dt));
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateMoleculeOscillation();
+            for (let i = 0; i < 10; i++) {
+
+                applyCentralForce();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.toggleOscillation = function () {
+            oscillationEnabled = !oscillationEnabled;
+        };
+
+        window.resetSimulation = function () {
+            oscillationEnabled = false;
+            velocity.set(0, Math.sqrt(G / initialRadius), 0);
+            oscillationPhase = 0;
+        };
+
+        document.getElementById('amplitude').addEventListener('input', (event) => {
+            amplitude = parseFloat(event.target.value);
+            document.getElementById('amplitudeValue').textContent = amplitude;
+        });
+
+        document.getElementById('frequency').addEventListener('input', (event) => {
+            omega = 2 * Math.PI * parseFloat(event.target.value);
+            document.getElementById('frequencyValue').textContent = parseFloat(event.target.value);
+        });
+    </script>
+</body>
+
+</html>
