@@ -1,7 +1,18 @@
 {
-	"folders": [
-		{
-			"path": "."
-		}
-	]
+    "folders": [
+        {
+            "path": ".",
+            "name": "Active Project"
+        }
+    ],
+    "settings": {
+        "files.exclude": {
+            "**/references/**": true,
+            "**/_ignore/**": true
+        },
+        "search.exclude": {
+            "**/references/**": true,
+            "**/_ignore/**": true
+        }
+    }
 }
