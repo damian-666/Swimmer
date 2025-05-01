@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Ball with Movable Mass (Cannon.js + Three.js)</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    #sliderContainer {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 10px;
+      font-family: sans-serif;
+    }
+    #debugInfo {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+<div id="sliderContainer">
+  <label for="massOffset">Mass Offset (relative to radius 0-1):</label>
+  <input type="range" id="massOffset" min="0" max="1" step="0.01" value="0">
+</div>
+<div id="debugInfo"></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.142.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.142.0/examples/js/controls/OrbitControls.js"></script>
+<script type="module">
+  import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+
+  // === Constants ===
+  const GRAVITY = -9.81; // m/s^2
+  const SPHERE_RADIUS = 5; // meters
+  const SPHERE_MASS = 11; // kg
+  const INNER_RADIUS = 0.2; // meters
+  const INNER_MASS = 10; // kg
+  const OBSTACLE_SIZE = SPHERE_RADIUS / 2; // meters
+  const ARENA_SIZE = 50; // meters
+  const FLOOR_THICKNESS = 2; // meters
+  const BALL_START_POSITION = new CANNON.Vec3(-10, SPHERE_RADIUS + 1, 0);
+  const BALL_START_VELOCITY = new CANNON.Vec3(5, 0, 0);
+  const BALL_OFFSET_MOMENT_OF_INERTIA = 0.6;
+  const OBSTACLE_POSITION = new CANNON.Vec3(0, OBSTACLE_SIZE / 2, 0);
+  const MAX_CONSTRAINT_FORCE = 100000; // Increased to ensure stability
+
+  // Collision groups
+  const COLLISION_GROUP_BALL = 1;
+  const COLLISION_GROUP_INNER = 2;
+  const COLLISION_GROUP_ENVIRONMENT = 4;
+
+  // === Scene Setup ===
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
+  const renderer = new THREE.WebGLRenderer();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  camera.position.set(10, 10, 10);
+  controls.update();
+
+  const world = new CANNON.World({ gravity: new CANNON.Vec3(0, GRAVITY, 0) });
+
+  // === Ground (Thick Box) ===
+  const groundShape = new CANNON.Box(new CANNON.Vec3(ARENA_SIZE / 2, FLOOR_THICKNESS / 2, ARENA_SIZE / 2));
+  const groundBody = new CANNON.Body({ mass: 0 });
+  groundBody.addShape(groundShape);
+  groundBody.position.set(0, -FLOOR_THICKNESS / 2, 0);
+  groundBody.collisionFilterGroup = COLLISION_GROUP_ENVIRONMENT;
+  world.addBody(groundBody);
+
+  const groundMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+  const groundGeo = new THREE.BoxGeometry(ARENA_SIZE, FLOOR_THICKNESS, ARENA_SIZE);
+  const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+  groundMesh.position.copy(groundBody.position);
+  scene.add(groundMesh);
+
+  // === Containment Walls ===
+  const wallHeight = 10;
+  const wallThickness = 1;
+  const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x999999 });
+  const wallShape = new CANNON.Box(new CANNON.Vec3(ARENA_SIZE / 2, wallHeight / 2, wallThickness / 2));
+
+  function addWall(x, z, rotY = 0) {
+    const wallBody = new CANNON.Body({ mass: 0 });
+    wallBody.addShape(wallShape);
+    wallBody.position.set(x, wallHeight / 2, z);
+    wallBody.quaternion.setFromEuler(0, rotY, 0);
+    wallBody.collisionFilterGroup = COLLISION_GROUP_ENVIRONMENT;
+    world.addBody(wallBody);
+
+    const wallGeo = new THREE.BoxGeometry(ARENA_SIZE, wallHeight, wallThickness);
+    const wallMesh = new THREE.Mesh(wallGeo, wallMaterial);
+    wallMesh.position.copy(wallBody.position);
+    wallMesh.quaternion.copy(wallBody.quaternion);
+    scene.add(wallMesh);
+  }
+
+  addWall(0, -ARENA_SIZE / 2);
+  addWall(0, ARENA_SIZE / 2);
+  addWall(-ARENA_SIZE / 2, 0, Math.PI / 2);
+  addWall(ARENA_SIZE / 2, 0, Math.PI / 2);
+  // === Outer Sphere (Wireframe) ===
+
+  const ballStartPosition =BALL_START_POSITION;
+  const ballBody = new CANNON.Body({ mass: SPHERE_MASS });
+  const ballShape = new CANNON.Sphere(SPHERE_RADIUS);
+  ballBody.addShape(ballShape);
+  ballBody.position = ballStartPosition.clone();
+  ballBody.velocity.set(BALL_START_VELOCITY.x, BALL_START_VELOCITY.y, BALL_START_VELOCITY.z); // initial push toward center
+  
+  // Set collision group and mask for outer ball
+  ballBody.collisionFilterGroup = COLLISION_GROUP_BALL;
+  ballBody.collisionFilterMask = COLLISION_GROUP_ENVIRONMENT; // Only collide with environment, not inner mass
+  
+  world.addBody(ballBody);
+
+  const ballGeo = new THREE.SphereGeometry(SPHERE_RADIUS, 32, 32);
+  const ballMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
+  const ballMesh = new THREE.Mesh(ballGeo, ballMat);
+  scene.add(ballMesh);
+
+  // === Internal Movable Mass ===
+  const innerMass = new CANNON.Body({ mass: INNER_MASS });
+  const innerShape = new CANNON.Sphere(INNER_RADIUS);
+  innerMass.addShape(innerShape);
+  
+  // Calculate the initial offset position
+  const initialMaxOffset = (SPHERE_RADIUS - INNER_RADIUS) * 0.9; 
+  const initialOffsetValue = initialMaxOffset * BALL_OFFSET_MOMENT_OF_INERTIA;
+  const initialPosition = ballStartPosition.clone();
+  
+  // Set inner mass initial position relative to ball's start position and rotation
+  // Start with ball's position
+  innerMass.position.copy(initialPosition);
+  // Calculate the offset vector in world space (initially aligned with global Y)
+  const initialWorldOffset = new CANNON.Vec3(0, initialOffsetValue, 0); 
+  // Add the world offset to the ball's position
+  innerMass.position.vadd(initialWorldOffset, innerMass.position);
+
+  // Initial velocity should match the ball's
+  innerMass.velocity.set(BALL_START_VELOCITY.x, BALL_START_VELOCITY.y, BALL_START_VELOCITY.z); 
+  
+  // Set collision group and mask for inner mass
+  innerMass.collisionFilterGroup = COLLISION_GROUP_INNER;
+  innerMass.collisionFilterMask = COLLISION_GROUP_ENVIRONMENT; // Only collide with environment, not outer ball
+  
+  world.addBody(innerMass);
+
+  const innerMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(INNER_RADIUS, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xff0000 })
+  );
+  scene.add(innerMesh);
+
+
+  let offsetMomentFactor = BALL_OFFSET_MOMENT_OF_INERTIA;
+  
+  // Calculate the initial offset based on the starting value
+  const initialMaxOffsetConstraint = (SPHERE_RADIUS - INNER_RADIUS) * 0.9;
+  const initialOffsetValueConstraint = initialMaxOffsetConstraint * offsetMomentFactor;
+
+  // Remove previous constraints (ensure this runs only if they exist)
+  // if (world.constraints.includes(distanceConstraint)) world.removeConstraint(distanceConstraint);
+  // if (world.constraints.includes(hingeZ)) world.removeConstraint(hingeZ);
+  // if (world.constraints.includes(hingeX)) world.removeConstraint(hingeX);
+  
+  // Create the correct PointToPointConstraint
+  const constraint = new CANNON.PointToPointConstraint(
+    ballBody, 
+    new CANNON.Vec3(0, initialOffsetValueConstraint, 0), // pivotA: Offset point on ballBody (local Y)
+    innerMass, 
+    new CANNON.Vec3(0, 0, 0),             // pivotB: Center of innerMass
+    MAX_CONSTRAINT_FORCE
+  );
+  world.addConstraint(constraint);
+
+  // Function to update the inner mass position along the Y axis (by updating constraint pivot)
+  function updateInnerMassPosition(value) {
+    // Store the value globally for reference
+    offsetMomentFactor = value;
+    
+    // Calculate offset based on value (0-1) and max possible distance
+    const maxOffset = (SPHERE_RADIUS - INNER_RADIUS) * 0.9; 
+    const offset = maxOffset * value;
+    
+    // Update pivotA (the offset point on the ballBody) in its local space
+    constraint.pivotA.set(0, offset, 0);
+    
+    // For debugging - show constraint direction (visualize the target offset point)
+    updateConstraintVisual(offset);
+  }
+  
+  // Add visual indicator for constraint
+  const constraintGeometry = new THREE.BufferGeometry();
+  const constraintMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
+  const constraintLine = new THREE.Line(constraintGeometry, constraintMaterial);
+  scene.add(constraintLine);
+  
+  function updateConstraintVisual(offset) {
+    // Create points showing the connection
+    const points = [];
+    points.push(new THREE.Vector3(0, 0, 0)); // Start at ball center
+    points.push(new THREE.Vector3(0, offset, 0)); // End at the target offset point along local Y
+    
+    // Update the line geometry
+    constraintGeometry.setFromPoints(points);
+    
+    // Position the line at the ball's position and rotation
+    constraintLine.position.copy(ballBody.position);
+    constraintLine.quaternion.copy(ballBody.quaternion);
+  }
+
+  // === Interaction Silder to set the moment of intertia to induce rotation and kinks and resonance===
+  document.getElementById("massOffset").min = 0;
+  document.getElementById("massOffset").max = 1;
+  document.getElementById("massOffset").step = 0.01;
+  document.getElementById("massOffset").value = BALL_OFFSET_MOMENT_OF_INERTIA  // start at 100% of radius
+  document.getElementById("massOffset").addEventListener("input", function (e) {
+    const value = parseFloat(e.target.value);
+    updateInnerMassPosition(value);
+  });
+
+  // Initialize with correct offset factor before animation starts
+  updateInnerMassPosition(BALL_OFFSET_MOMENT_OF_INERTIA);
+
+  // === Animation Loop ===
+  // Flag to track if simulation has started
+  window.simulationStarted = false;
+  const debugElement = document.getElementById('debugInfo');
+  
+  function animate() {
+    requestAnimationFrame(animate);
+    
+    // Mark simulation as started after first frame
+    window.simulationStarted = true;
+    
+    // Physics step
+    world.step(1 / 60);
+    
+    // Update constraint visualization based on the *current* pivotA y-value
+    updateConstraintVisual(constraint.pivotA.y);
+    
+    // Update meshes to match physics bodies
+    ballMesh.position.copy(ballBody.position);
+    ballMesh.quaternion.copy(ballBody.quaternion);
+    innerMesh.position.copy(innerMass.position);
+    innerMesh.quaternion.copy(innerMass.quaternion);
+    
+    // Calculate inner mass position in ballBody's local space
+    const worldDiff = new CANNON.Vec3();
+    innerMass.position.vsub(ballBody.position, worldDiff);
+    const localInnerPos = new CANNON.Vec3();
+    ballBody.quaternion.conjugate().vmult(worldDiff, localInnerPos);
+    
+    // Display debug info
+    const actualDistance = worldDiff.length();
+    const desiredDistance = constraint.pivotA.length(); // Desired distance is length of pivotA vector
+        
+    debugElement.innerHTML = `
+      Slider Value: ${offsetMomentFactor.toFixed(2)}<br>
+      Target Offset (local Y): ${constraint.pivotA.y.toFixed(2)} m<br>
+      Actual World Distance: ${actualDistance.toFixed(2)} m<br>
+      Inner Local Pos: (${localInnerPos.x.toFixed(2)}, ${localInnerPos.y.toFixed(2)}, ${localInnerPos.z.toFixed(2)})<br>
+      Ball Position: (${ballBody.position.x.toFixed(1)}, ${ballBody.position.y.toFixed(1)}, ${ballBody.position.z.toFixed(1)})<br>
+      Inner Position: (${innerMass.position.x.toFixed(1)}, ${innerMass.position.y.toFixed(1)}, ${innerMass.position.z.toFixed(1)})
+    `;
+
+    renderer.render(scene, camera);
+  }
+  
+  // Initialize with correct offset factor before animation starts
+  animate();
+
+  // === Obstacle in Middle ===
+  const obstacleShape = new CANNON.Box(new CANNON.Vec3(OBSTACLE_SIZE / 2, OBSTACLE_SIZE / 2, OBSTACLE_SIZE / 2));
+  const obstacleBody = new CANNON.Body({ mass: 0 });
+  obstacleBody.addShape(obstacleShape);
+  obstacleBody.position.set(0, OBSTACLE_SIZE / 2, 0);
+  obstacleBody.collisionFilterGroup = COLLISION_GROUP_ENVIRONMENT;
+  world.addBody(obstacleBody);
+
+  const obstacleMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(OBSTACLE_SIZE, OBSTACLE_SIZE, OBSTACLE_SIZE),
+    new THREE.MeshStandardMaterial({ color: 0x00ff00 })
+  );
+  obstacleMesh.position.copy(obstacleBody.position);
+  scene.add(obstacleMesh);
+</script>
+</body>
+</html>
